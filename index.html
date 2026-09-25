@@ -2,12 +2,11 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minecraft 3D v0.1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minecraft 3D v0.2 - Mobile</title>
     <link rel="stylesheet" href="css/style.css">
     <!-- Thư viện Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
     <div id="crosshair">+</div>
@@ -16,13 +15,16 @@
         <div id="block-selector">Đang chọn: <span id="current-block-name">Cỏ</span></div>
     </div>
 
-    <div id="instructions">
-        <h1>Minecraft 3D v0.1</h1>
-        <p>Click để bắt đầu chơi</p>
-        <p>Di chuyển: <b>W, A, S, D</b> | Nhảy: <b>Space</b></p>
-        <p>Đập block: <b>Click chuột trái</b> | Đặt block: <b>Click chuột phải</b></p>
-        <p>Chọn loại block: Phím số <b>1, 2, 3</b></p>
-        <p>Thoát chuột: Nhấn <b>ESC</b></p>
+    <!-- Joystick ảo cho di động -->
+    <div id="joystick-zone">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <!-- Nút bấm hành động trên màn hình cảm ứng -->
+    <div id="action-buttons">
+        <div class="action-btn" id="btn-switch">ĐỔI</div>
+        <div class="action-btn" id="btn-place">ĐẶT</div>
+        <div class="action-btn" id="btn-break">ĐẬP</div>
     </div>
 
     <!-- Các module JavaScript -->
