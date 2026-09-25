@@ -5,7 +5,7 @@ import { UI } from './ui.js';
 class Game {
     constructor() {
         this.initThree();
-        this.initTestBox(); // Test Box theo yêu cầu của ChatGPT
+        this.initTestBox();
         this.initGameWorld();
         this.initListeners();
         this.animate();
@@ -14,7 +14,7 @@ class Game {
     initThree() {
         // 1. Scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB); // Màu trời xanh
+        this.scene.background = new THREE.Color(0x87CEEB); // Màu trời xanh Minecraft
 
         // 2. Camera
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -22,31 +22,36 @@ class Game {
         this.camera.lookAt(0, 0, 0);
 
         // 3. Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         
-        // Đảm bảo canvas nằm dưới cùng và phủ toàn màn hình để không bị che bởi UI đen
-        this.renderer.domElement.style.position = 'fixed';
-        this.renderer.domElement.style.top = '0';
-        this.renderer.domElement.style.left = '0';
-        this.renderer.domElement.style.zIndex = '0'; // Đặt dưới UI
-        document.body.appendChild(this.renderer.domElement);
+        // QUAN TRỌNG: Thiết lập CSS để canvas hiển thị đúng chuẩn màn hình mobile, nằm dưới các nút bấm UI nhưng hiển thị đè lên background đen
+        const canvas = this.renderer.domElement;
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        canvas.style.zIndex = '1'; // Đảm bảo nổi lên trên nền đen
+        document.body.insertBefore(canvas, document.body.firstChild);
 
         // 4. Ánh sáng
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         this.scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        this.scene.add(dirLight);
     }
 
     initTestBox() {
-        // BÀI TEST BOX THEO YÊU CẦU CHATGPT: Tạo một khối hộp đơn giản ngay trước camera
+        // Test Box theo yêu cầu: Khối hộp màu đỏ kiểm tra render
         const geometry = new THREE.BoxGeometry(2, 2, 2);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Màu đỏ chói dễ nhận biết
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         this.testBox = new THREE.Mesh(geometry, material);
-        this.testBox.position.set(0, 0, -5); // Đặt ngay trước mặt camera
+        this.testBox.position.set(0, 0, -5);
         this.scene.add(this.testBox);
-        
-        console.log("🧪 TEST BOX ADDED. Scene children count:", this.scene.children.length);
     }
 
     initGameWorld() {
@@ -66,7 +71,6 @@ class Game {
     animate() {
         requestAnimationFrame(() => this.animate());
 
-        // Cho test box xoay nhẹ để nhận biết render loop có chạy không
         if (this.testBox) {
             this.testBox.rotation.x += 0.01;
             this.testBox.rotation.y += 0.01;
