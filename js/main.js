@@ -1,25 +1,29 @@
-class StableGame {
+import { World } from './world.js';
+
+class MinecraftGame {
     constructor() {
         try {
             this.initThree();
-            this.initCameraControls();
+            this.initWorld();
+            this.initUI();
             this.animate();
-            console.log("🟢 Stable Game initialized successfully.");
+            console.log("🟢 Khởi tạo game thành công!");
         } catch (error) {
-            this.showErrorScreen("Init Error", error);
+            this.showError(error);
         }
     }
 
     initThree() {
-        // 1. Scene & Background màu trời Minecraft
+        // 1. Scene & Màu trời đặc trưng
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
 
-        // 2. Camera đặt ở vị trí nhìn bao quát đẹp mắt
+        // 2. Camera đặt ở góc nhìn bao quát đẹp mắt
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 3, 6);
+        this.camera.position.set(4, 4, 6);
+        this.camera.lookAt(0, 0, 0);
 
-        // 3. Renderer tối ưu
+        // 3. WebGL Renderer tối ưu cho điện thoại
         this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -33,95 +37,77 @@ class StableGame {
         canvas.style.zIndex = '1';
         document.body.appendChild(canvas);
 
-        // 4. Ánh sáng cơ bản để test khối 3D nếu cần
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
-        this.scene.add(ambientLight);
+        // Xử lý resize màn hình tự động
+        window.addEventListener('resize', () => {
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     }
 
-    initCameraControls() {
-        // Hệ thống điều khiển xoay góc nhìn an toàn, không làm lệch camera ra ngoài không gian
-        this.lon = 0;
-        this.lat = 0;
-        this.phi = 0;
-        this.theta = 0;
-
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-
-        const onPointerDown = (e) => {
-            isDragging = true;
-            previousMousePosition = {
-                x: e.clientX || (e.touches && e.touches[0].clientX),
-                y: e.clientY || (e.touches && e.touches[0].clientY)
-            };
-        };
-
-        const onPointerMove = (e) => {
-            if (!isDragging) return;
-
-            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-
-            const deltaX = clientX - previousMousePosition.x;
-            const deltaY = clientY - previousMousePosition.y;
-
-            this.lon -= deltaX * 0.5;
-            this.lat += deltaY * 0.5;
-
-            // Giới hạn góc nhìn lên xuống không bị lật ngược đầu
-            this.lat = Math.max(-85, Math.min(85, this.lat));
-
-            this.phi = THREE.MathUtils.degToRad(90 - this.lat);
-            this.theta = THREE.MathUtils.degToRad(this.lon);
-
-            previousMousePosition = { x: clientX, y: clientY };
-        };
-
-        const onPointerUp = () => {
-            isDragging = false;
-        };
-
-        window.addEventListener('pointerdown', onPointerDown);
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-
-        // Cập nhật hướng nhìn liên tục trong render loop
-        this.updateCameraLookAt = () => {
-            const target = new THREE.Vector3();
-            const distance = 10;
-            
-            target.x = this.camera.position.x + distance * Math.sin(this.phi) * Math.cos(this.theta);
-            target.y = this.camera.position.y + distance * Math.cos(this.phi);
-            target.z = this.camera.position.z + distance * Math.sin(this.phi) * Math.sin(this.theta);
-
-            this.camera.lookAt(target);
-        };
+    initWorld() {
+        // Gọi module World để dựng các khối block 3D
+        this.world = new World(this.scene);
     }
 
-    showErrorScreen(title, error) {
+    initUI() {
+        // Tạo giao diện các nút bấm quen thuộc (ĐỔI, NHẢY, ĐẶT, ĐẬP) góc phải màn hình
+        const uiContainer = document.createElement('div');
+        uiContainer.style.position = 'fixed';
+        uiContainer.style.top = '0';
+        uiContainer.style.left = '0';
+        uiContainer.style.width = '100%';
+        uiContainer.style.height = '100%';
+        uiContainer.style.zIndex = '10';
+        uiContainer.style.pointerEvents = 'none';
+        document.body.appendChild(uiContainer);
+
+        const btnWrapper = document.createElement('div');
+        btnWrapper.style.position = 'absolute';
+        btnWrapper.style.right = '20px';
+        btnWrapper.style.bottom = '20px';
+        btnWrapper.style.display = 'grid';
+        btnWrapper.style.gridTemplateColumns = 'repeat(2, 65px)';
+        btnWrapper.style.gap = '10px';
+        btnWrapper.style.pointerEvents = 'auto';
+
+        ['ĐỔI', 'NHẢY', 'ĐẶT', 'ĐẬP'].forEach(text => {
+            const btn = document.createElement('button');
+            btn.innerText = text;
+            btn.style.width = '65px';
+            btn.style.height = '65px';
+            btn.style.borderRadius = '50%';
+            btn.style.background = 'rgba(0, 0, 0, 0.6)';
+            btn.style.color = '#fff';
+            btn.style.border = '2px solid #fff';
+            btn.style.fontSize = '13px';
+            btn.style.fontWeight = 'bold';
+            btn.style.cursor = 'pointer';
+
+            btn.addEventListener('click', () => {
+                console.log(`🔘 Đã bấm nút: ${text}`);
+            });
+
+            btnWrapper.appendChild(btn);
+        });
+
+        uiContainer.appendChild(btnWrapper);
+    }
+
+    showError(error) {
         document.body.innerHTML = `<div style="color:red; padding:20px; font-family:monospace;">
-            <h3>❌ ${title}</h3>
+            <h3>❌ Lỗi khởi động game</h3>
             <p>${error.message}</p>
         </div>`;
         console.error(error);
     }
 
     animate() {
-        try {
-            requestAnimationFrame(() => this.animate());
-
-            // Cập nhật góc nhìn camera mượt mà
-            if (this.updateCameraLookAt) {
-                this.updateCameraLookAt();
-            }
-
-            this.renderer.render(this.scene, this.camera);
-        } catch (error) {
-            this.showErrorScreen("Render Loop Error", error);
-        }
+        requestAnimationFrame(() => this.animate());
+        this.renderer.render(this.scene, this.camera);
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new StableGame();
+    new MinecraftGame();
 });
