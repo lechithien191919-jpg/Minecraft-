@@ -5,7 +5,7 @@ import { UI } from './ui.js';
 class Game {
     constructor() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB); // Màu trời xanh Minecraft
+        this.scene.background = new THREE.Color(0x87CEEB); // Màu trời Minecraft
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -24,49 +24,13 @@ class Game {
         this.world = new World(this.scene);
         this.world.generate();
 
-        this.player = new Player(this.camera, this.renderer.domElement);
         this.ui = new UI();
-
-        this.raycaster = new THREE.Raycaster();
-        this.mouse = new THREE.Vector2(0, 0); // Tâm màn hình
-
-        this.initMouseInteractions();
+        this.player = new Player(this.camera, this.renderer.domElement, this.world, this.ui);
 
         window.addEventListener('resize', () => this.onWindowResize());
 
         this.clock = new THREE.Clock();
         this.animate();
-    }
-
-    initMouseInteractions() {
-        window.addEventListener('mousedown', (e) => {
-            if (!this.player.controls.isLocked) return;
-
-            this.raycaster.setFromCamera(this.mouse, this.camera);
-            const intersects = this.raycaster.intersectObjects(this.scene.children);
-
-            if (intersects.length > 0) {
-                const intersect = intersects[0];
-
-                // Giới hạn tầm với của nhân vật (ví dụ trong bán kính 6 đơn vị)
-                if (intersect.distance > 6) return;
-
-                if (e.button === 0) {
-                    // Click trái: Đập block
-                    if (intersect.object !== this.skyMesh) {
-                        this.world.removeBlock(intersect.object);
-                    }
-                } else if (e.button === 2) {
-                    // Click phải: Đặt block dựa vào mặt phẳng tiếp xúc (normal)
-                    const position = intersect.object.position.clone().add(intersect.face.normal);
-                    const selectedType = this.ui.getSelectedBlock();
-                    this.world.addBlock(position.x, position.y, position.z, selectedType);
-                }
-            }
-        });
-
-        // Chặn menu chuột phải mặc định để dùng cho việc đặt block
-        window.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     onWindowResize() {
@@ -85,5 +49,5 @@ class Game {
     }
 }
 
-// Chạy game khi load xong
+// Chạy game
 new Game();
