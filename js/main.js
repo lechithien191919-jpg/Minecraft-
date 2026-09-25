@@ -1,11 +1,11 @@
-class StableMinecraftGame {
+class FixedMinecraftGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
             this.initControls();
             this.animate();
-            console.log("🟢 Khởi tạo game với cơ chế vuốt xoay mượt mà chuẩn di động!");
+            console.log("🟢 Khởi tạo game hoàn hảo: Cố định góc nhìn & Vuốt mượt mà!");
         } catch (error) {
             this.showError(error);
         }
@@ -68,6 +68,7 @@ class StableMinecraftGame {
             isJumping: false
         };
 
+        // Góc quay mặc định nhìn về phía trước
         this.lon = 0;
         this.lat = 0;
         this.moveVector = new THREE.Vector2(0, 0);
@@ -162,12 +163,12 @@ class StableMinecraftGame {
             e.stopPropagation();
         });
 
-        // --- 3. XOAY MÀN HÌNH BẰNG CÁCH VUỐT (CHỐNG TRÔI) ---
+        // --- 3. XOAY MÀN HÌNH BẰNG CÁCH VUỐT (SIÊU MƯỢT, CHỐNG ĐƠ) ---
         let lookPointerId = null;
         let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
-            // Nếu chạm ở nửa bên phải màn hình và chưa có ngón tay nào đang xoay
+            // Chạm bất cứ vùng trống nào bên phải màn hình để vuốt xoay
             if (e.clientX > window.innerWidth * 0.35 && lookPointerId === null && !joyActive) {
                 lookPointerId = e.pointerId;
                 lastX = e.clientX;
@@ -176,7 +177,7 @@ class StableMinecraftGame {
         });
 
         window.addEventListener('pointermove', (e) => {
-            // Xử lý di chuyển Joystick
+            // Xử lý kéo Joystick
             if (joyActive && e.pointerId === joyPointerId) {
                 const dx = e.clientX - center.x;
                 const dy = e.clientY - center.y;
@@ -191,7 +192,7 @@ class StableMinecraftGame {
                 this.moveVector.set(mx / maxDist, my / maxDist);
             }
 
-            // Xử lý vuốt xoay màn hình
+            // Xử lý vuốt xoay màn hình mượt mà
             if (lookPointerId !== null && e.pointerId === lookPointerId) {
                 const dx = e.clientX - lastX;
                 const dy = e.clientY - lastY;
@@ -239,22 +240,26 @@ class StableMinecraftGame {
             }
         }
 
+        // Tính toán hướng nhìn camera từ góc quay lon/lat
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
 
-        const dir = new THREE.Vector3(
+        // Vector hướng nhìn chuẩn xác của camera
+        const forwardDir = new THREE.Vector3(
             Math.sin(phi) * Math.sin(theta),
             0,
             Math.sin(phi) * Math.cos(theta)
         ).normalize();
 
-        const side = new THREE.Vector3(-dir.z, 0, dir.x);
+        const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
+        // Di chuyển nhân vật dựa theo Joystick mà KHÔNG làm thay đổi hướng nhìn camera
         if (this.moveVector.lengthSq() > 0) {
-            this.player.position.addScaledVector(dir, -this.moveVector.y * this.player.speed);
-            this.player.position.addScaledVector(side, this.moveVector.x * this.player.speed);
+            this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
+            this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
         }
 
+        // Cập nhật điểm nhìn (Target) của camera theo góc xoay vuốt màn hình
         const target = new THREE.Vector3(
             this.camera.position.x + 10 * Math.sin(phi) * Math.sin(theta),
             this.camera.position.y + 10 * Math.cos(phi),
@@ -275,6 +280,6 @@ class StableMinecraftGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new StableMinecraftGame();
+    new FixedMinecraftGame();
 });
-            
+        
