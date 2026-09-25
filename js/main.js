@@ -1,55 +1,86 @@
-// Thêm đoạn code xử lý xoay camera bằng cách vuốt màn hình (Touch/Mouse Drag) vào trong class Game:
-initCameraControls() {
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-    
-    // Góc quay hiện tại của camera
-    this.lon = 0;
-    this.lat = 0;
+class TestAGame {
+    constructor() {
+        try {
+            this.initThree();
+            this.initTouchCamera();
+            this.animate();
+            console.log("🟢 Test A initialized successfully.");
+        } catch (error) {
+            this.showErrorScreen("Test A Init Error", error);
+        }
+    }
 
-    const onPointerDown = (e) => {
-        isDragging = true;
-        previousMousePosition = {
-            x: e.clientX || (e.touches && e.touches[0].clientX),
-            y: e.clientY || (e.touches && e.touches[0].clientY)
-        };
-    };
+    initThree() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x87CEEB);
 
-    const onPointerMove = (e) => {
-        if (!isDragging) return;
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 2, 5);
+        this.camera.lookAt(0, 0, 0);
 
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        const deltaX = clientX - previousMousePosition.x;
-        const deltaY = clientY - previousMousePosition.y;
+        const canvas = this.renderer.domElement;
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        canvas.style.zIndex = '1';
+        document.body.appendChild(canvas);
+    }
 
-        this.lon -= deltaX * 0.5;
-        this.lat += deltaY * 0.5;
-        this.lat = Math.max(-85, Math.min(85, this.lat)); // Giới hạn góc nhìn lên xuống
+    initTouchCamera() {
+        let isPointerDown = false;
+        let previousX = 0;
+        let previousY = 0;
 
-        // Cập nhật hướng nhìn của camera theo góc quay Euler
-        const phi = THREE.MathUtils.degToRad(90 - this.lat);
-        const theta = THREE.MathUtils.degToRad(this.lon);
+        window.addEventListener('pointerdown', (e) => {
+            isPointerDown = true;
+            previousX = e.clientX;
+            previousY = e.clientY;
+        });
 
-        const targetX = this.camera.position.x + 100 * Math.sin(phi) * Math.cos(theta);
-        const targetY = this.camera.position.y + 100 * Math.cos(phi);
-        const targetZ = this.camera.position.z + 100 * Math.sin(phi) * Math.sin(theta);
+        window.addEventListener('pointermove', (e) => {
+            if (!isPointerDown) return;
+            const deltaX = e.clientX - previousX;
+            const deltaY = e.clientY - previousY;
 
-        this.camera.lookAt(targetX, targetY, targetZ);
+            // Xoay camera đơn giản quanh trục Y và X
+            this.camera.rotation.y -= deltaX * 0.005;
+            this.camera.rotation.x -= deltaY * 0.005;
 
-        previousMousePosition = { x: clientX, y: clientY };
-    };
+            previousX = e.clientX;
+            previousY = e.clientY;
+        });
 
-    const onPointerUp = () => {
-        isDragging = false;
-    };
+        window.addEventListener('pointerup', () => {
+            isPointerDown = false;
+        });
+    }
 
-    window.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
+    showErrorScreen(title, error) {
+        document.body.innerHTML = `<div style="color:red; padding:20px; font-family:monospace;">
+            <h3>❌ ${title}</h3>
+            <p>${error.message}</p>
+            <p><small>${error.stack}</small></p>
+        </div>`;
+        console.error(error);
+    }
 
-    window.addEventListener('touchstart', onPointerDown, { passive: true });
-    window.addEventListener('touchmove', onPointerMove, { passive: true });
-    window.addEventListener('touchend', onPointerUp);
+    animate() {
+        try {
+            requestAnimationFrame(() => this.animate());
+            this.renderer.render(this.scene, this.camera);
+        } catch (error) {
+            this.showErrorScreen("Render Loop Error", error);
+        }
+    }
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+    new TestAGame();
+});
+
