@@ -3,9 +3,7 @@ import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
 export class World {
     constructor(scene) {
         this.scene = scene;
-        this.blocks = new Map(); // Lưu trữ block theo tọa độ "x,y,z"
-        
-        // Tạo lại mặt phẳng cơ bản ổn định để test
+        this.blocks = new Map();
         this.generateFlatWorld();
     }
 
@@ -14,7 +12,7 @@ export class World {
     }
 
     generateFlatWorld() {
-        // Tạo một lớp nền phẳng ổn định (ví dụ sàn đá/cỏ rộng 10x10)
+        // Tạo sàn phẳng 11x11 an toàn
         for (let x = -5; x <= 5; x++) {
             for (let z = -5; z <= 5; z++) {
                 this.addBlock(x, 0, z, BLOCK_TYPES.GRASS);
@@ -26,7 +24,7 @@ export class World {
 
     addBlock(x, y, z, type) {
         const key = this.getKey(x, y, z);
-        if (this.blocks.has(key)) return; // Đã có block thì bỏ qua
+        if (this.blocks.has(key)) return;
 
         const material = getBlockMaterial(type);
         const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -49,7 +47,6 @@ export class World {
 
         this.scene.remove(mesh);
         mesh.geometry.dispose();
-        
         this.blocks.delete(key);
     }
 
