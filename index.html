@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 3D v0.1</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Thư viện Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+    <div id="crosshair">+</div>
+    
+    <div id="ui-container">
+        <div id="block-selector">Đang chọn: <span id="current-block-name">Cỏ</span></div>
+    </div>
+
+    <div id="instructions">
+        <h1>Minecraft 3D v0.1</h1>
+        <p>Click để bắt đầu chơi</p>
+        <p>Di chuyển: <b>W, A, S, D</b> | Nhảy: <b>Space</b></p>
+        <p>Đập block: <b>Click chuột trái</b> | Đặt block: <b>Click chuột phải</b></p>
+        <p>Chọn loại block: Phím số <b>1, 2, 3</b></p>
+        <p>Thoát chuột: Nhấn <b>ESC</b></p>
+    </div>
+
+    <!-- Các module JavaScript -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
