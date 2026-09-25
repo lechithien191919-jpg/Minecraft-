@@ -1,4 +1,4 @@
-class MinecraftPlatformGame {
+class MinecraftJoystickGame {
     constructor() {
         try {
             this.initThree();
@@ -6,7 +6,7 @@ class MinecraftPlatformGame {
             this.initPlayerAndControls();
             this.initUI();
             this.animate();
-            console.log("🟢 Khởi tạo game nền tảng khổng lồ thành công!");
+            console.log("🟢 Khởi tạo game với Joystick chuẩn & Fix xoay màn hình thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -17,7 +17,7 @@ class MinecraftPlatformGame {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
 
-        // 2. Camera (Đóng vai trò góc nhìn nhân vật)
+        // 2. Camera đặt vị trí nhìn bao quát nhân vật
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.set(0, 3, 5);
 
@@ -50,49 +50,50 @@ class MinecraftPlatformGame {
     }
 
     initWorld() {
-        // Tạo một nền tảng mặt đất khổng lồ (Sân cỏ phẳng rộng lớn)
-        const groundGeo = new THREE.BoxGeometry(40, 1, 40);
-        const groundMat = new THREE.MeshBasicMaterial({ color: 0x559933 }); // Xanh cỏ
+        // Tạo nền tảng mặt đất khổng lồ
+        const groundGeo = new THREE.BoxGeometry(50, 1, 50);
+        const groundMat = new THREE.MeshBasicMaterial({ color: 0x559933 }); 
         this.ground = new THREE.Mesh(groundGeo, groundMat);
         this.ground.position.set(0, -1, 0);
         this.scene.add(this.ground);
 
-        // Thêm vài khối block phụ trên sàn để tạo điểm nhấn
-        for (let i = -3; i <= 3; i += 2) {
+        // Thêm vài khối block phụ trên sàn để dễ nhận diện chuyển động
+        for (let i = -4; i <= 4; i += 2) {
             const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-            const boxMat = new THREE.MeshBasicMaterial({ color: 0x8b5a2b }); // Nâu đất
+            const boxMat = new THREE.MeshBasicMaterial({ color: 0x8b5a2b }); 
             const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set(i, 0.5, -5);
+            box.position.set(i, 0.5, -6);
             this.scene.add(box);
         }
     }
 
     initPlayerAndControls() {
-        // Biến trạng thái nhân vật & camera
         this.player = {
             position: this.camera.position,
             velocity: new THREE.Vector3(),
-            speed: 0.1,
+            speed: 0.08,
             isJumping: false
         };
 
+        // Góc quay camera
         this.lon = 0;
         this.lat = 0;
         this.phi = 0;
         this.theta = 0;
 
-        // Trạng thái điều khiển di chuyển
-        this.moveState = { forward: false, backward: false, left: false, right: false };
+        // Vector hướng di chuyển từ Joystick
+        this.moveVector = new THREE.Vector2(0, 0);
 
+        // FIX XOAY MÀN HÌNH: Cảm ứng phần nửa phải màn hình để xoay mượt mà
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
 
-        // Xốt cảm ứng xoay màn hình (có thể xoay bất cứ lúc nào, kể cả khi đang di chuyển)
         window.addEventListener('pointerdown', (e) => {
-            // Tránh vùng nút bấm UI ở góc phải
-            if (e.clientX > window.innerWidth - 180 && e.clientY > window.innerHeight - 200) return;
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+            // Chỉ cho phép xoay khi chạm ở nửa bên phải màn hình (tránh bấm nhầm UI nút bấm và Joystick)
+            if (e.clientX > window.innerWidth * 0.4) {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
         });
 
         window.addEventListener('pointermove', (e) => {
@@ -100,9 +101,9 @@ class MinecraftPlatformGame {
             const deltaX = e.clientX - previousMousePosition.x;
             const deltaY = e.clientY - previousMousePosition.y;
 
-            this.lon -= deltaX * 0.4;
-            this.lat += deltaY * 0.4;
-            this.lat = Math.max(-85, Math.min(85, this.lat));
+            this.lon -= deltaX * 0.3;
+            this.lat += deltaY * 0.3;
+            this.lat = Math.max(-85, Math.min(85, this.lat)); // Giới hạn góc nhìn lên xuống
 
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
@@ -113,7 +114,6 @@ class MinecraftPlatformGame {
     }
 
     initUI() {
-        // Giao diện nút bấm & Joystick giả lập
         const uiContainer = document.createElement('div');
         uiContainer.style.position = 'fixed';
         uiContainer.style.top = '0';
@@ -124,7 +124,7 @@ class MinecraftPlatformGame {
         uiContainer.style.pointerEvents = 'none';
         document.body.appendChild(uiContainer);
 
-        // Vùng nút bấm bên phải (ĐỔI, NHẢY, ĐẶT, ĐẬP)
+        // 1. Cụm nút bấm bên phải (ĐỔI, NHẢY, ĐẶT, ĐẬP)
         const btnWrapper = document.createElement('div');
         btnWrapper.style.position = 'absolute';
         btnWrapper.style.right = '20px';
@@ -162,52 +162,82 @@ class MinecraftPlatformGame {
         });
         uiContainer.appendChild(btnWrapper);
 
-        // Joystick đơn giản bên trái để di chuyển tiến/lùi/trái/phải
-        const joystickArea = document.createElement('div');
-        joystickArea.style.position = 'absolute';
-        joystickArea.style.left = '30px';
-        joystickArea.style.bottom = '30px';
-        joystickArea.style.width = '120px';
-        joystickArea.style.height = '120px';
-        joystickArea.style.borderRadius = '50%';
-        joystickArea.style.background = 'rgba(255, 255, 255, 0.2)';
-        joystickArea.style.border = '2px solid rgba(255, 255, 255, 0.5)';
-        joystickArea.style.pointerEvents = 'auto';
-        joystickArea.style.display = 'flex';
-        joystickArea.style.alignItems = 'center';
-        joystickArea.style.justifyContent = 'center';
-        joystickArea.style.color = '#fff';
-        joystickArea.style.fontSize = '12px';
-        joystickArea.style.fontWeight = 'bold';
-        joystickArea.innerText = 'KÉO ĐỂ ĐI';
+        // 2. JOYSTICK CHUẨN: Vòng tròn to bên ngoài và vòng tròn nhỏ bên trong kéo thả
+        const outerSize = 130;
+        const innerSize = 55;
 
-        let joyTouch = false;
-        joystickArea.addEventListener('pointerdown', (e) => { joyTouch = true; });
+        const joystickOuter = document.createElement('div');
+        joystickOuter.style.position = 'absolute';
+        joystickOuter.style.left = '30px';
+        joystickOuter.style.bottom = '30px';
+        joystickOuter.style.width = `${outerSize}px`;
+        joystickOuter.style.height = `${outerSize}px`;
+        joystickOuter.style.borderRadius = '50%';
+        joystickOuter.style.background = 'rgba(255, 255, 255, 0.15)';
+        joystickOuter.style.border = '2px solid rgba(255, 255, 255, 0.4)';
+        joystickOuter.style.pointerEvents = 'auto';
+        joystickOuter.style.touchAction = 'none';
+
+        const joystickInner = document.createElement('div');
+        joystickInner.style.position = 'absolute';
+        joystickInner.style.left = `${(outerSize - innerSize) / 2}px`;
+        joystickInner.style.top = `${(outerSize - innerSize) / 2}px`;
+        joystickInner.style.width = `${innerSize}px`;
+        joystickInner.style.height = `${innerSize}px`;
+        joystickInner.style.borderRadius = '50%';
+        joystickInner.style.background = 'rgba(255, 255, 255, 0.7)';
+        joystickInner.style.boxShadow = '0 2px 5px rgba(0,0,0,0.3)';
+        joystickInner.style.pointerEvents = 'none';
+        joystickInner.style.transition = 'transform 0.05s linear';
+
+        joystickOuter.appendChild(joystickInner);
+        uiContainer.appendChild(joystickOuter);
+
+        let joyActive = false;
+        let joyCenter = { x: 0, y: 0 };
+        const maxDist = 40; // Bán kính dịch chuyển tối đa của nút nhỏ
+
+        joystickOuter.addEventListener('pointerdown', (e) => {
+            joyActive = true;
+            const rect = joystickOuter.getBoundingClientRect();
+            joyCenter.x = rect.left + rect.width / 2;
+            joyCenter.y = rect.top + rect.height / 2;
+            e.stopPropagation();
+        });
+
         window.addEventListener('pointermove', (e) => {
-            if (!joyTouch) return;
-            const rect = joystickArea.getBoundingClientRect();
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-            const dx = e.clientX - centerX;
-            const dy = e.clientY - centerY;
+            if (!joyActive) return;
+            const dx = e.clientX - joyCenter.x;
+            const dy = e.clientY - joyCenter.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-            this.moveState.forward = dy < -20;
-            this.moveState.backward = dy > 20;
-            this.moveState.left = dx < -20;
-            this.moveState.right = dx > 20;
-        });
-        window.addEventListener('pointerup', () => {
-            joyTouch = false;
-            this.moveState = { forward: false, backward: false, left: false, right: false };
+            let angle = Math.atan2(dy, dx);
+            let constrainedDist = Math.min(dist, maxDist);
+
+            let moveX = Math.cos(angle) * constrainedDist;
+            let moveY = Math.sin(angle) * constrainedDist;
+
+            joystickInner.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+            // Tính vector chuẩn hóa hướng đi [-1 đến 1]
+            this.moveVector.set(moveX / maxDist, moveY / maxDist);
         });
 
-        uiContainer.appendChild(joystickArea);
+        const resetJoystick = () => {
+            if (!joyActive) return;
+            joyActive = false;
+            joystickInner.style.transform = `translate(0px, 0px)`;
+            this.moveVector.set(0, 0);
+        };
+
+        window.addEventListener('pointerup', resetJoystick);
+        window.addEventListener('pointercancel', resetJoystick);
     }
 
     jump() {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
-            this.player.velocity.y = 0.15; // Lực nhảy lên
+            this.player.velocity.y = 0.15; // Lực nhảy
         }
     }
 
@@ -217,7 +247,6 @@ class MinecraftPlatformGame {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01; // Trọng lực kéo xuống
 
-            // Chạm đất (độ cao y = 2.5 tương ứng sàn phẳng)
             if (this.player.position.y <= 2.5) {
                 this.player.position.y = 2.5;
                 this.player.isJumping = false;
@@ -225,27 +254,29 @@ class MinecraftPlatformGame {
             }
         }
 
-        // Xử lý di chuyển theo hướng camera
+        // Hướng nhìn camera
+        this.phi = THREE.MathUtils.degToRad(90 - this.lat);
+        this.theta = THREE.MathUtils.degToRad(this.lon);
+
         const dir = new THREE.Vector3();
-        this.camera.getWorldDirection(dir);
-        dir.y = 0; // Giữ mặt phẳng ngang
+        dir.x = Math.sin(this.phi) * Math.sin(this.theta);
+        dir.y = 0;
+        dir.z = Math.sin(this.phi) * Math.cos(this.theta);
         dir.normalize();
 
         const sideDir = new THREE.Vector3(-dir.z, 0, dir.x);
 
-        if (this.moveState.forward) this.player.position.addScaledVector(dir, this.player.speed);
-        if (this.moveState.backward) this.player.position.addScaledVector(dir, -this.player.speed);
-        if (this.moveState.left) this.player.position.addScaledVector(sideDir, this.player.speed);
-        if (this.moveState.right) this.player.position.addScaledVector(sideDir, -this.player.speed);
+        // Di chuyển dựa trên độ kéo của joystick (moveVector.y: tiến/lùi, moveVector.x: trái/phải)
+        if (this.moveVector.lengthSq() > 0) {
+            this.player.position.addScaledVector(dir, -this.moveVector.y * this.player.speed);
+            this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
+        }
 
-        // Cập nhật góc nhìn camera từ độ xoay lon/lat
-        this.phi = THREE.MathUtils.degToRad(90 - this.lat);
-        this.theta = THREE.MathUtils.degToRad(this.lon);
-
+        // Cập nhật hướng nhìn thực tế của camera
         const target = new THREE.Vector3();
-        target.x = this.camera.position.x + 10 * Math.sin(this.phi) * Math.cos(this.theta);
+        target.x = this.camera.position.x + 10 * Math.sin(this.phi) * Math.sin(this.theta);
         target.y = this.camera.position.y + 10 * Math.cos(this.phi);
-        target.z = this.camera.position.z + 10 * Math.sin(this.phi) * Math.sin(this.theta);
+        target.z = this.camera.position.z + 10 * Math.sin(this.phi) * Math.cos(this.theta);
         this.camera.lookAt(target);
     }
 
@@ -265,6 +296,6 @@ class MinecraftPlatformGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new MinecraftPlatformGame();
+    new MinecraftJoystickGame();
 });
-    
+            
