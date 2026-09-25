@@ -1,11 +1,11 @@
-class Checkpoint3MinecraftGame {
+class Checkpoint4ChunkGame {
     constructor() {
         try {
             this.initThree();
-            this.initWorld();
+            this.initChunkWorld();
             this.initControls();
             this.animate();
-            console.log("🟢 Checkpoint 3: Đã tích hợp Block & Texture với hệ thống điều khiển đa nhiệm!");
+            console.log("🟢 Checkpoint 4: Basic Chunk 16x16 System đã khởi chạy!");
         } catch (error) {
             this.showError(error);
         }
@@ -16,7 +16,8 @@ class Checkpoint3MinecraftGame {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 3, 5);
+        // Đặt camera đứng trên chunk 16x16 (tâm chunk ở khoảng x:8, z:8)
+        this.camera.position.set(8, 6, 16);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -31,12 +32,11 @@ class Checkpoint3MinecraftGame {
         canvas.style.zIndex = '1';
         document.body.appendChild(canvas);
 
-        const light = new THREE.AmbientLight(0xffffff, 1.0);
+        const light = new THREE.AmbientLight(0xffffff, 0.9);
         this.scene.add(light);
 
-        // Ánh sáng phụ giúp nổi khối block
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 10);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(20, 40, 20);
         this.scene.add(dirLight);
 
         window.addEventListener('resize', () => {
@@ -46,9 +46,7 @@ class Checkpoint3MinecraftGame {
         });
     }
 
-    // Tạo Texture đơn giản bằng Canvas để phân biệt rõ Grass (mặt trên/bên/dưới), Dirt, Stone
     createBlockMaterials() {
-        // Hàm tạo canvas texture 16x16 pixel mang phong cách cổ điển
         const createPixelTexture = (drawCallback) => {
             const canvas = document.createElement('canvas');
             canvas.width = 16;
@@ -61,98 +59,124 @@ class Checkpoint3MinecraftGame {
             return texture;
         };
 
-        // 1. Texture Dirt (Đất)
         const dirtTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#8B5A2B';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#6F441F';
-            for(let i=0; i<20; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<20; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
-        // 2. Texture Grass Top (Cỏ mặt trên)
         const grassTopTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#559933';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#448822';
-            for(let i=0; i<15; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<15; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
-        // 3. Texture Grass Side (Cỏ mặt bên)
         const grassSideTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#8B5A2B';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#559933';
-            ctx.fillRect(0, 0, 16, 5); // phần cỏ xanh ở trên
-            // Tạo hiệu ứng lởm chởm cỏ rủ xuống
+            ctx.fillRect(0, 0, 16, 5);
             ctx.fillRect(2, 5, 1, 2);
             ctx.fillRect(5, 5, 2, 3);
             ctx.fillRect(10, 5, 1, 2);
             ctx.fillRect(13, 5, 2, 1);
         });
 
-        // 4. Texture Stone (Đá)
         const stoneTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#808080';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#606060';
-            for(let i=0; i<25; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<25; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
         return {
             dirt: new THREE.MeshLambertMaterial({ map: dirtTex }),
             stone: new THREE.MeshLambertMaterial({ map: stoneTex }),
             grass: [
-                grassSideTex, // phải
-                grassSideTex, // trái
-                grassTopTex,  // trên (Grass Top)
-                dirtTex,      // dưới (Dirt)
-                grassSideTex, // trước
-                grassSideTex  // sau
+                grassSideTex, grassSideTex, grassTopTex, dirtTex, grassSideTex, grassSideTex
             ].map(tex => new THREE.MeshLambertMaterial({ map: tex }))
         };
     }
 
-    initWorld() {
-        const materials = this.createBlockMaterials();
+    initChunkWorld() {
+        this.chunkSize = 16;
+        this.chunkHeight = 4; // Độ cao cơ bản cho phép đập/đặt và di chuyển
+        
+        // Cấu trúc dữ liệu Voxel 3D cho Chunk 16x16
+        // 0: Không có block, 'grass', 'dirt', 'stone'
+        this.chunkData = [];
+        this.blockMeshes = new Map(); // Lưu trữ mesh theo tọa độ "x,y,z" để dễ đập/đặt
 
-        // Tạo mặt đất chính bằng khối Grass
-        const groundGeo = new THREE.BoxGeometry(40, 1, 40);
-        this.ground = new THREE.Mesh(groundGeo, materials.grass);
-        this.ground.position.set(0, -1, 0);
-        this.scene.add(this.ground);
+        const mats = this.createBlockMaterials();
+        this.blockMaterials = mats;
 
-        // Xây dựng các khối block mẫu (Grass, Dirt, Stone) có ID và tọa độ riêng
-        const blockTypes = ['grass', 'dirt', 'stone'];
-        const blockMats = [materials.grass, materials.dirt, materials.stone];
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
-        this.worldBlocks = [];
+        for (let x = 0; x < this.chunkSize; x++) {
+            this.chunkData[x] = [];
+            for (let y = 0; y < this.chunkHeight; y++) {
+                this.chunkData[x][y] = [];
+                for (let z = 0; z < this.chunkSize; z++) {
+                    let type = 'air';
+                    let material = null;
 
-        let idCounter = 1;
-        for (let i = -3; i <= 3; i += 2) {
-            const typeIndex = (Math.abs(i) % 3);
-            const blockGeo = new THREE.BoxGeometry(1, 1, 1);
-            const block = new THREE.Mesh(blockGeo, blockMats[typeIndex]);
-            
-            const posX = i;
-            const posY = 0.5;
-            const posZ = -5;
+                    // Phân tầng cấu trúc block theo yêu cầu
+                    if (y === 3) {
+                        type = 'grass';
+                        material = mats.grass;
+                    } else if (y === 2 || y === 1) {
+                        type = 'dirt';
+                        material = mats.dirt;
+                    } else if (y === 0) {
+                        type = 'stone';
+                        material = mats.stone;
+                    }
 
-            block.position.set(posX, posY, posZ);
-            this.scene.add(block);
+                    this.chunkData[x][y][z] = type;
 
-            // Lưu thông tin block chuẩn theo yêu cầu (ID, Type, Tọa độ)
-            this.worldBlocks.push({
-                id: idCounter++,
-                type: blockTypes[typeIndex],
-                position: { x: posX, y: posY, z: posZ },
-                mesh: block
-            });
+                    if (type !== 'air') {
+                        const mesh = new THREE.Mesh(boxGeo, material);
+                        mesh.position.set(x, y, z);
+                        this.scene.add(mesh);
+                        this.blockMeshes.set(`${x},${y},${z}`, mesh);
+                    }
+                }
+            }
+        }
+    }
+
+    // Hàm đập block tại vị trí x, y, z cụ thể
+    breakBlock(x, y, z) {
+        const key = `${x},${y},${z}`;
+        if (this.blockMeshes.has(key)) {
+            const mesh = this.blockMeshes.get(key);
+            this.scene.remove(mesh);
+            mesh.geometry.dispose();
+            this.blockMeshes.delete(key);
+            this.chunkData[x][y][z] = 'air';
+            console.log(`🔨 Đã đập block tại: ${x}, ${y}, ${z}`);
+        }
+    }
+
+    // Hàm đặt thêm block mới
+    placeBlock(x, y, z, type = 'stone') {
+        if (x >= 0 && x < this.chunkSize && y >= 0 && y < this.chunkHeight && z >= 0 && z < this.chunkSize) {
+            const key = `${x},${y},${z}`;
+            if (!this.blockMeshes.has(key)) {
+                let mat = this.blockMaterials.stone;
+                if (type === 'dirt') mat = this.blockMaterials.dirt;
+                if (type === 'grass') mat = this.blockMaterials.grass;
+
+                const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+                const mesh = new THREE.Mesh(boxGeo, mat);
+                mesh.position.set(x, y, z);
+                this.scene.add(mesh);
+                this.blockMeshes.set(key, mesh);
+                this.chunkData[x][y][z] = type;
+                console.log(`📦 Đã đặt block ${type} tại: ${x}, ${y}, ${z}`);
+            }
         }
     }
 
@@ -165,9 +189,9 @@ class Checkpoint3MinecraftGame {
         };
 
         this.lon = 0;
-        this.lat = 0;
+        this.lat = -15; // Nhìn hơi chúc xuống để thấy rõ mặt đất chunk 16x16
         this.targetLon = 0;
-        this.targetLat = 0;
+        this.targetLat = -15;
         this.moveVector = new THREE.Vector2(0, 0);
 
         // UI Container
@@ -181,7 +205,7 @@ class Checkpoint3MinecraftGame {
         ui.style.pointerEvents = 'none';
         document.body.appendChild(ui);
 
-        // --- 1. NÚT BẤM PHẢI ---
+        // --- 1. NÚT BẤM PHẢI (ĐỔI, NHẢY, ĐẶT, ĐẬP) ---
         const btnBox = document.createElement('div');
         btnBox.style.position = 'absolute';
         btnBox.style.right = '20px';
@@ -192,10 +216,20 @@ class Checkpoint3MinecraftGame {
         btnBox.style.pointerEvents = 'auto';
 
         const actions = [
-            { text: 'ĐỔI', cb: () => {} },
+            { text: 'ĐỔI', cb: () => { console.log("Đổi block"); } },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => {} },
-            { text: 'ĐẬP', cb: () => {} }
+            { text: 'ĐẶT', cb: () => { 
+                // Test đặt block ngay trước mặt player ở tầng cỏ (y=4)
+                let px = Math.floor(this.player.position.x);
+                let pz = Math.floor(this.player.position.z);
+                this.placeBlock(px, 4, pz, 'stone');
+            } },
+            { text: 'ĐẬP', cb: () => { 
+                // Test đập block dưới chân hoặc trước mặt
+                let px = Math.floor(this.player.position.x);
+                let pz = Math.floor(this.player.position.z);
+                this.breakBlock(px, 3, pz);
+            } }
         ];
 
         actions.forEach(item => {
@@ -333,8 +367,9 @@ class Checkpoint3MinecraftGame {
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01;
-            if (this.player.position.y <= 2.5) {
-                this.player.position.y = 2.5;
+            // Giới hạn chiều cao đứng trên bề mặt block mặt đất (y mặt đất là 3, camera cao hơn 1.5 đơn vị -> ~4.5)
+            if (this.player.position.y <= 4.5) {
+                this.player.position.y = 4.5;
                 this.player.isJumping = false;
                 this.player.velocity.y = 0;
             }
@@ -376,6 +411,6 @@ class Checkpoint3MinecraftGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint3MinecraftGame();
+    new Checkpoint4ChunkGame();
 });
-            
+                                    
