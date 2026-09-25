@@ -10,23 +10,23 @@ export class Player {
         this.camera.rotation.order = 'YXZ';
 
         this.moveDir = { x: 0, z: 0 };
-        this.speed = 5.0; // Tốc độ di chuyển chuẩn Minecraft
+        this.speed = 5.0; 
         
-        // Kích thước hộp va chạm của nhân vật (AABB)
-        this.radius = 0.3;     // Bán kính bề ngang nhân vật
-        this.height = 1.6;     // Chiều cao nhân vật
-        this.eyeHeight = 1.4;  // Khoảng cách từ chân đến mắt
+        // Kích thước hộp va chạm (AABB)
+        this.radius = 0.3;     
+        this.height = 1.6;     
+        this.eyeHeight = 1.4;  
 
-        // Biến vật lý trọng lực & nhảy
+        // Vật lý trọng lực & nhảy
         this.gravity = 25.0;
         this.verticalVelocity = 0;
         this.isGrounded = false;
         this.jumpForce = 8.5;
 
-        // Xoay camera cảm ứng
+        // Quản lý cảm ứng đa điểm (Multi-touch)
+        this.lookTouchId = null;
         this.touchScreenX = 0;
         this.touchScreenY = 0;
-        this.isSwiping = false;
         this.euler = new THREE.Euler(0, 0, 0, 'YXZ');
         this.sensitivity = 0.003;
 
@@ -37,22 +37,25 @@ export class Player {
         const joystickZone = document.getElementById('joystick-zone');
         const knob = document.getElementById('joystick-knob');
         let joystickCenter = { x: 0, y: 0 };
-        let activeTouchId = null;
+        let activeJoystickId = null;
 
+        // 1. Điều khiển Joystick (Di chuyển)
         joystickZone.addEventListener('touchstart', (e) => {
             e.stopPropagation();
             const touch = e.changedTouches[0];
-            activeTouchId = touch.identifier;
-            const rect = joystickZone.getBoundingClientRect();
-            joystickCenter.x = rect.left + rect.width / 2;
-            joystickCenter.y = rect.top + rect.height / 2;
+            if (activeJoystickId === null) {
+                activeJoystickId = touch.identifier;
+                const rect = joystickZone.getBoundingClientRect();
+                joystickCenter.x = rect.left + rect.width / 2;
+                joystickCenter.y = rect.top + rect.height / 2;
+            }
         });
 
         joystickZone.addEventListener('touchmove', (e) => {
             e.stopPropagation();
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const touch = e.changedTouches[i];
-                if (touch.identifier === activeTouchId) {
+                if (touch.identifier === activeJoystickId) {
                     const dx = touch.clientX - joystickCenter.x;
                     const dy = touch.clientY - joystickCenter.y;
                     const distance = Math.min(45, Math.sqrt(dx * dx + dy * dy));
@@ -62,7 +65,6 @@ export class Player {
                     const limitedY = Math.sin(angle) * distance;
 
                     knob.style.transform = `translate(${limitedX}px, ${limitedY}px)`;
-
                     this.moveDir.x = limitedX / 45;
                     this.moveDir.z = limitedY / 45;
                 }
@@ -71,55 +73,82 @@ export class Player {
 
         const resetJoystick = (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
-                if (e.changedTouches[i].identifier === activeTouchId) {
-                    activeTouchId = null;
+                if (e.changedTouches[i].identifier === activeJoystickId) {
+                    activeJoystickId = null;
                     knob.style.transform = `translate(0px, 0px)`;
                     this.moveDir.x = 0;
                     this.moveDir.z = 0;
                 }
             }
         };
-
         joystickZone.addEventListener('touchend', resetJoystick);
         joystickZone.addEventListener('touchcancel', resetJoystick);
 
-        // Xoay camera cảm ứng (tránh vùng hotbar và các nút)
+        // 2. Xoay camera mượt mà bằng phần màn hình bên phải (Hỗ trợ multi-touch độc lập)
         window.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
-            if (touch.clientX > window.innerWidth / 3 && touch.clientY < window.innerHeight - 120) {
-                this.isSwiping = true;
-                this.touchScreenX = touch.clientX;
-                this.touchScreenY = touch.clientY;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                // Nếu chạm ở nửa phải màn hình và chưa gán ngón xoay camera
+                if (touch.clientX > window.innerWidth / 3 && this.lookTouchId === null) {
+                    // Kiểm tra không chạm vào khu vực nút bấm hoặc hotbar
+                    if (touch.clientY < window.innerHeight - 130) {
+                        this.lookTouchId = touch.identifier;
+                        this.touchScreenX = touch.clientX;
+                        this.touchScreenY = touch.clientY;
+                    }
+                }
             }
         });
 
         window.addEventListener('touchmove', (e) => {
-            if (!this.isSwiping) return;
-            const touch = e.touches[0];
-            
-            const deltaX = touch.clientX - this.touchScreenX;
-            const deltaY = touch.clientY - this.touchScreenY;
+            if (this.lookTouchId === null) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === this.lookTouchId) {
+                    const deltaX = touch.clientX - this.touchScreenX;
+                    const deltaY = touch.clientY - this.touchScreenY;
 
-            this.touchScreenX = touch.clientX;
-            this.touchScreenY = touch.clientY;
+                    this.touchScreenX = touch.clientX;
+                    this.touchScreenY = touch.clientY;
 
-            this.euler.setFromQuaternion(this.camera.quaternion);
-            this.euler.y -= deltaX * this.sensitivity;
-            this.euler.x -= deltaY * this.sensitivity;
-            this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
+                    this.euler.setFromQuaternion(this.camera.quaternion);
+                    this.euler.y -= deltaX * this.sensitivity;
+                    this.euler.x -= deltaY * this.sensitivity;
+                    this.euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.euler.x));
 
-            this.camera.quaternion.setFromEuler(this.euler);
+                    this.camera.quaternion.setFromEuler(this.euler);
+                }
+            }
         });
 
-        window.addEventListener('touchend', () => {
-            this.isSwiping = false;
-        });
+        const endCameraTouch = (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === this.lookTouchId) {
+                    this.lookTouchId = null;
+                }
+            }
+        };
+        window.addEventListener('touchend', endCameraTouch);
+        window.addEventListener('touchcancel', endCameraTouch);
 
-        // Nút bấm hành động
-        document.getElementById('btn-break').addEventListener('click', (e) => { e.stopPropagation(); this.doAction('break'); });
-        document.getElementById('btn-place').addEventListener('click', (e) => { e.stopPropagation(); this.doAction('place'); });
-        document.getElementById('btn-jump').addEventListener('click', (e) => { e.stopPropagation(); this.jump(); });
-        document.getElementById('btn-switch').addEventListener('click', (e) => { e.stopPropagation(); this.ui.cycleBlock(); });
+        // 3. Các nút bấm hành động (Đảm bảo bắt sự kiện cực nhạy và không bị cản trở)
+        const bindButton = (id, action) => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.addEventListener('touchstart', (e) => {
+                    e.stopPropagation(); // Chặn lan truyền sự kiện chạm để ko ảnh hưởng xoay màn hình
+                });
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    action();
+                });
+            }
+        };
+
+        bindButton('btn-break', () => this.doAction('break'));
+        bindButton('btn-place', () => this.doAction('place'));
+        bindButton('btn-jump', () => this.jump());
+        bindButton('btn-switch', () => this.ui.cycleBlock());
     }
 
     jump() {
@@ -145,7 +174,7 @@ export class Player {
             } else if (type === 'place') {
                 const position = intersect.object.position.clone().add(intersect.face.normal);
                 
-                // Kiểm tra không đặt block đè lên vị trí nhân vật đang đứng
+                // Không cho đặt block đè lên người chơi
                 const playerMinX = this.camera.position.x - this.radius;
                 const playerMaxX = this.camera.position.x + this.radius;
                 const playerMinZ = this.camera.position.z - this.radius;
@@ -156,7 +185,7 @@ export class Player {
                 if (!(position.x + 0.5 < playerMinX || position.x - 0.5 > playerMaxX ||
                       position.y + 0.5 < playerMinY || position.y - 0.5 > playerMaxY ||
                       position.z + 0.5 < playerMinZ || position.z - 0.5 > playerMaxZ)) {
-                    return; // Đang vướng thân người chơi, không cho đặt
+                    return; 
                 }
 
                 const selectedType = this.ui.getSelectedBlock();
@@ -165,7 +194,6 @@ export class Player {
         }
     }
 
-    // Kiểm tra xem vị trí (x, y, z) có chạm block nào không
     checkCollision(x, y, z) {
         const minX = x - this.radius;
         const maxX = x + this.radius;
@@ -174,7 +202,6 @@ export class Player {
         const minY = y - this.eyeHeight;
         const maxY = y + (this.height - this.eyeHeight);
 
-        // Quét các ô xung quanh vị trí nhân vật
         const startX = Math.floor(minX);
         const endX = Math.floor(maxX);
         const startY = Math.floor(minY);
@@ -187,7 +214,6 @@ export class Player {
                 for (let bz = startZ; bz <= endZ; bz++) {
                     const block = this.world.getBlockAt(bx, by, bz);
                     if (block) {
-                        // Kiểm tra va chạm hộp AABB
                         const bMinX = bx - 0.5, bMaxX = bx + 0.5;
                         const bMinY = by - 0.5, bMaxY = by + 0.5;
                         const bMinZ = bz - 0.5, bMaxZ = bz + 0.5;
@@ -195,7 +221,7 @@ export class Player {
                         if (maxX > bMinX && minX < bMaxX &&
                             maxY > bMinY && minY < bMaxY &&
                             maxZ > bMinZ && minZ < bMaxZ) {
-                            return true; // Có va chạm
+                            return true; 
                         }
                     }
                 }
@@ -205,9 +231,8 @@ export class Player {
     }
 
     update(delta) {
-        if (delta > 0.1) delta = 0.1; // Chống giật lag khung hình
+        if (delta > 0.1) delta = 0.1; 
 
-        // 1. Tính toán vector hướng di chuyển ngang
         let moveVector = new THREE.Vector3();
         if (this.moveDir.x !== 0 || this.moveDir.z !== 0) {
             const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.euler.y);
@@ -220,33 +245,31 @@ export class Player {
 
         const horizontalStep = moveVector.clone().multiplyScalar(this.speed * delta);
 
-        // 2. Xử lý va chạm và di chuyển theo trục X
+        // Trục X
         if (horizontalStep.x !== 0) {
             this.camera.position.x += horizontalStep.x;
             if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
-                // Thử hỗ trợ bước lên bậc block cao 1 đơn vị
                 if (this.isGrounded && !this.checkCollision(this.camera.position.x, this.camera.position.y + 1.0, this.camera.position.z)) {
-                    this.camera.position.y += 1.0; // Bước lên bậc
+                    this.camera.position.y += 1.0; 
                 } else {
-                    this.camera.position.x -= horizontalStep.x; // Lùi lại nếu vướng tường
+                    this.camera.position.x -= horizontalStep.x; 
                 }
             }
         }
 
-        // 3. Xử lý va chạm và di chuyển theo trục Z
+        // Trục Z
         if (horizontalStep.z !== 0) {
             this.camera.position.z += horizontalStep.z;
             if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
-                // Thử hỗ trợ bước lên bậc block cao 1 đơn vị
                 if (this.isGrounded && !this.checkCollision(this.camera.position.x, this.camera.position.y + 1.0, this.camera.position.z)) {
-                    this.camera.position.y += 1.0; // Bước lên bậc
+                    this.camera.position.y += 1.0; 
                 } else {
-                    this.camera.position.z -= horizontalStep.z; // Lùi lại nếu vướng tường
+                    this.camera.position.z -= horizontalStep.z; 
                 }
             }
         }
 
-        // 4. Trọng lực & Xử lý va chạm theo trục Y (Rơi / Nhảy)
+        // Trọng lực & Trục Y
         this.verticalVelocity -= this.gravity * delta;
         const verticalStep = this.verticalVelocity * delta;
 
@@ -254,23 +277,18 @@ export class Player {
             this.camera.position.y += verticalStep;
             if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
                 if (this.verticalVelocity < 0) {
-                    // Rơi chạm đất: ép sát bề mặt block phía dưới
                     this.camera.position.y -= verticalStep;
-                    // Tìm đúng vị trí mặt block phía dưới chân để đứng khớp
                     const currentFootY = this.camera.position.y - this.eyeHeight;
                     const blockY = Math.floor(currentFootY);
                     this.camera.position.y = blockY + 0.5 + this.eyeHeight;
                     this.isGrounded = true;
                 } else {
-                    // Nhảy chạm trần nhà: khựng lại không đi xuyên qua
                     this.camera.position.y -= verticalStep;
                 }
                 this.verticalVelocity = 0;
             } else {
-                // Kiểm tra nếu lơ lửng trên không
                 this.isGrounded = false;
             }
         }
     }
-                        }
-
+            }
