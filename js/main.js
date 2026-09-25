@@ -1,28 +1,24 @@
-class MinecraftJoystickGame {
+class StableMinecraftGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
-            this.initPlayerAndControls();
-            this.initUI();
+            this.initControls();
             this.animate();
-            console.log("🟢 Khởi tạo game với Joystick chuẩn & Fix xoay màn hình thành công!");
+            console.log("🟢 Khởi tạo game với cơ chế vuốt xoay mượt mà chuẩn di động!");
         } catch (error) {
             this.showError(error);
         }
     }
 
     initThree() {
-        // 1. Scene & Màu trời Minecraft
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x87CEEB);
 
-        // 2. Camera đặt vị trí nhìn bao quát nhân vật
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.camera.position.set(0, 3, 5);
 
-        // 3. Renderer tối ưu di động
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -35,12 +31,8 @@ class MinecraftJoystickGame {
         canvas.style.zIndex = '1';
         document.body.appendChild(canvas);
 
-        // 4. Ánh sáng
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-        this.scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(10, 20, 10);
-        this.scene.add(directionalLight);
+        const light = new THREE.AmbientLight(0xffffff, 1.0);
+        this.scene.add(light);
 
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -50,24 +42,25 @@ class MinecraftJoystickGame {
     }
 
     initWorld() {
-        // Tạo nền tảng mặt đất khổng lồ
-        const groundGeo = new THREE.BoxGeometry(50, 1, 50);
-        const groundMat = new THREE.MeshBasicMaterial({ color: 0x559933 }); 
+        // Nền tảng mặt đất
+        const groundGeo = new THREE.BoxGeometry(40, 1, 40);
+        const groundMat = new THREE.MeshBasicMaterial({ color: 0x559933 });
         this.ground = new THREE.Mesh(groundGeo, groundMat);
         this.ground.position.set(0, -1, 0);
         this.scene.add(this.ground);
 
-        // Thêm vài khối block phụ trên sàn để dễ nhận diện chuyển động
-        for (let i = -4; i <= 4; i += 2) {
-            const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-            const boxMat = new THREE.MeshBasicMaterial({ color: 0x8b5a2b }); 
-            const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set(i, 0.5, -6);
+        // Khối block làm mốc
+        for (let i = -3; i <= 3; i += 2) {
+            const box = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshBasicMaterial({ color: 0x8b5a2b })
+            );
+            box.position.set(i, 0.5, -5);
             this.scene.add(box);
         }
     }
 
-    initPlayerAndControls() {
+    initControls() {
         this.player = {
             position: this.camera.position,
             velocity: new THREE.Vector3(),
@@ -75,178 +68,170 @@ class MinecraftJoystickGame {
             isJumping: false
         };
 
-        // Góc quay camera
         this.lon = 0;
         this.lat = 0;
-        this.phi = 0;
-        this.theta = 0;
-
-        // Vector hướng di chuyển từ Joystick
         this.moveVector = new THREE.Vector2(0, 0);
 
-        // FIX XOAY MÀN HÌNH: Cảm ứng phần nửa phải màn hình để xoay mượt mà
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
+        // UI Container
+        const ui = document.createElement('div');
+        ui.style.position = 'fixed';
+        ui.style.top = '0';
+        ui.style.left = '0';
+        ui.style.width = '100%';
+        ui.style.height = '100%';
+        ui.style.zIndex = '10';
+        ui.style.pointerEvents = 'none';
+        document.body.appendChild(ui);
+
+        // --- 1. NÚT BẤM PHẢI (ĐỔI, NHẢY, ĐẶT, ĐẬP) ---
+        const btnBox = document.createElement('div');
+        btnBox.style.position = 'absolute';
+        btnBox.style.right = '20px';
+        btnBox.style.bottom = '20px';
+        btnBox.style.display = 'grid';
+        btnBox.style.gridTemplateColumns = 'repeat(2, 65px)';
+        btnBox.style.gap = '10px';
+        btnBox.style.pointerEvents = 'auto';
+
+        const actions = [
+            { text: 'ĐỔI', cb: () => {} },
+            { text: 'NHẢY', cb: () => this.jump() },
+            { text: 'ĐẶT', cb: () => {} },
+            { text: 'ĐẬP', cb: () => {} }
+        ];
+
+        actions.forEach(item => {
+            const b = document.createElement('button');
+            b.innerText = item.text;
+            b.style.width = '65px';
+            b.style.height = '65px';
+            b.style.borderRadius = '50%';
+            b.style.background = 'rgba(0, 0, 0, 0.6)';
+            b.style.color = '#fff';
+            b.style.border = '2px solid #fff';
+            b.style.fontWeight = 'bold';
+            b.addEventListener('click', (e) => {
+                e.stopPropagation();
+                item.cb();
+            });
+            btnBox.appendChild(b);
+        });
+        ui.appendChild(btnBox);
+
+        // --- 2. JOYSTICK TRÁI (VÒNG TO + VÒNG NHỎ) ---
+        const outerSize = 120;
+        const innerSize = 50;
+
+        const joyOuter = document.createElement('div');
+        joyOuter.style.position = 'absolute';
+        joyOuter.style.left = '30px';
+        joyOuter.style.bottom = '30px';
+        joyOuter.style.width = `${outerSize}px`;
+        joyOuter.style.height = `${outerSize}px`;
+        joyOuter.style.borderRadius = '50%';
+        joyOuter.style.background = 'rgba(255, 255, 255, 0.2)';
+        joyOuter.style.border = '2px solid rgba(255, 255, 255, 0.5)';
+        joyOuter.style.pointerEvents = 'auto';
+        joyOuter.style.touchAction = 'none';
+
+        const joyInner = document.createElement('div');
+        joyInner.style.position = 'absolute';
+        joyInner.style.left = `${(outerSize - innerSize) / 2}px`;
+        joyInner.style.top = `${(outerSize - innerSize) / 2}px`;
+        joyInner.style.width = `${innerSize}px`;
+        joyInner.style.height = `${innerSize}px`;
+        joyInner.style.borderRadius = '50%';
+        joyInner.style.background = 'rgba(255, 255, 255, 0.8)';
+        joyInner.style.pointerEvents = 'none';
+
+        joyOuter.appendChild(joyInner);
+        ui.appendChild(joyOuter);
+
+        let joyActive = false;
+        let joyPointerId = null;
+        let center = { x: 0, y: 0 };
+        const maxDist = 35;
+
+        joyOuter.addEventListener('pointerdown', (e) => {
+            if (joyActive) return;
+            joyActive = true;
+            joyPointerId = e.pointerId;
+            const r = joyOuter.getBoundingClientRect();
+            center.x = r.left + r.width / 2;
+            center.y = r.top + r.height / 2;
+            e.stopPropagation();
+        });
+
+        // --- 3. XOAY MÀN HÌNH BẰNG CÁCH VUỐT (CHỐNG TRÔI) ---
+        let lookPointerId = null;
+        let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
-            // Chỉ cho phép xoay khi chạm ở nửa bên phải màn hình (tránh bấm nhầm UI nút bấm và Joystick)
-            if (e.clientX > window.innerWidth * 0.4) {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
+            // Nếu chạm ở nửa bên phải màn hình và chưa có ngón tay nào đang xoay
+            if (e.clientX > window.innerWidth * 0.35 && lookPointerId === null && !joyActive) {
+                lookPointerId = e.pointerId;
+                lastX = e.clientX;
+                lastY = e.clientY;
             }
         });
 
         window.addEventListener('pointermove', (e) => {
-            if (!isDragging) return;
-            const deltaX = e.clientX - previousMousePosition.x;
-            const deltaY = e.clientY - previousMousePosition.y;
+            // Xử lý di chuyển Joystick
+            if (joyActive && e.pointerId === joyPointerId) {
+                const dx = e.clientX - center.x;
+                const dy = e.clientY - center.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+                const d = Math.min(dist, maxDist);
 
-            this.lon -= deltaX * 0.3;
-            this.lat += deltaY * 0.3;
-            this.lat = Math.max(-85, Math.min(85, this.lat)); // Giới hạn góc nhìn lên xuống
+                const mx = Math.cos(angle) * d;
+                const my = Math.sin(angle) * d;
 
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+                joyInner.style.transform = `translate(${mx}px, ${my}px)`;
+                this.moveVector.set(mx / maxDist, my / maxDist);
+            }
+
+            // Xử lý vuốt xoay màn hình
+            if (lookPointerId !== null && e.pointerId === lookPointerId) {
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+
+                this.lon -= dx * 0.4;
+                this.lat += dy * 0.4;
+                this.lat = Math.max(-85, Math.min(85, this.lat));
+
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }
         });
 
-        window.addEventListener('pointerup', () => {
-            isDragging = false;
-        });
-    }
-
-    initUI() {
-        const uiContainer = document.createElement('div');
-        uiContainer.style.position = 'fixed';
-        uiContainer.style.top = '0';
-        uiContainer.style.left = '0';
-        uiContainer.style.width = '100%';
-        uiContainer.style.height = '100%';
-        uiContainer.style.zIndex = '10';
-        uiContainer.style.pointerEvents = 'none';
-        document.body.appendChild(uiContainer);
-
-        // 1. Cụm nút bấm bên phải (ĐỔI, NHẢY, ĐẶT, ĐẬP)
-        const btnWrapper = document.createElement('div');
-        btnWrapper.style.position = 'absolute';
-        btnWrapper.style.right = '20px';
-        btnWrapper.style.bottom = '20px';
-        btnWrapper.style.display = 'grid';
-        btnWrapper.style.gridTemplateColumns = 'repeat(2, 65px)';
-        btnWrapper.style.gap = '10px';
-        btnWrapper.style.pointerEvents = 'auto';
-
-        const buttons = [
-            { text: 'ĐỔI', action: () => console.log('Đổi block') },
-            { text: 'NHẢY', action: () => this.jump() },
-            { text: 'ĐẶT', action: () => console.log('Đặt block') },
-            { text: 'ĐẬP', action: () => console.log('Đập block') }
-        ];
-
-        buttons.forEach(b => {
-            const btn = document.createElement('button');
-            btn.innerText = b.text;
-            btn.style.width = '65px';
-            btn.style.height = '65px';
-            btn.style.borderRadius = '50%';
-            btn.style.background = 'rgba(0, 0, 0, 0.6)';
-            btn.style.color = '#fff';
-            btn.style.border = '2px solid #fff';
-            btn.style.fontSize = '13px';
-            btn.style.fontWeight = 'bold';
-            btn.style.cursor = 'pointer';
-
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                b.action();
-            });
-            btnWrapper.appendChild(btn);
-        });
-        uiContainer.appendChild(btnWrapper);
-
-        // 2. JOYSTICK CHUẨN: Vòng tròn to bên ngoài và vòng tròn nhỏ bên trong kéo thả
-        const outerSize = 130;
-        const innerSize = 55;
-
-        const joystickOuter = document.createElement('div');
-        joystickOuter.style.position = 'absolute';
-        joystickOuter.style.left = '30px';
-        joystickOuter.style.bottom = '30px';
-        joystickOuter.style.width = `${outerSize}px`;
-        joystickOuter.style.height = `${outerSize}px`;
-        joystickOuter.style.borderRadius = '50%';
-        joystickOuter.style.background = 'rgba(255, 255, 255, 0.15)';
-        joystickOuter.style.border = '2px solid rgba(255, 255, 255, 0.4)';
-        joystickOuter.style.pointerEvents = 'auto';
-        joystickOuter.style.touchAction = 'none';
-
-        const joystickInner = document.createElement('div');
-        joystickInner.style.position = 'absolute';
-        joystickInner.style.left = `${(outerSize - innerSize) / 2}px`;
-        joystickInner.style.top = `${(outerSize - innerSize) / 2}px`;
-        joystickInner.style.width = `${innerSize}px`;
-        joystickInner.style.height = `${innerSize}px`;
-        joystickInner.style.borderRadius = '50%';
-        joystickInner.style.background = 'rgba(255, 255, 255, 0.7)';
-        joystickInner.style.boxShadow = '0 2px 5px rgba(0,0,0,0.3)';
-        joystickInner.style.pointerEvents = 'none';
-        joystickInner.style.transition = 'transform 0.05s linear';
-
-        joystickOuter.appendChild(joystickInner);
-        uiContainer.appendChild(joystickOuter);
-
-        let joyActive = false;
-        let joyCenter = { x: 0, y: 0 };
-        const maxDist = 40; // Bán kính dịch chuyển tối đa của nút nhỏ
-
-        joystickOuter.addEventListener('pointerdown', (e) => {
-            joyActive = true;
-            const rect = joystickOuter.getBoundingClientRect();
-            joyCenter.x = rect.left + rect.width / 2;
-            joyCenter.y = rect.top + rect.height / 2;
-            e.stopPropagation();
-        });
-
-        window.addEventListener('pointermove', (e) => {
-            if (!joyActive) return;
-            const dx = e.clientX - joyCenter.x;
-            const dy = e.clientY - joyCenter.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            let angle = Math.atan2(dy, dx);
-            let constrainedDist = Math.min(dist, maxDist);
-
-            let moveX = Math.cos(angle) * constrainedDist;
-            let moveY = Math.sin(angle) * constrainedDist;
-
-            joystickInner.style.transform = `translate(${moveX}px, ${moveY}px)`;
-
-            // Tính vector chuẩn hóa hướng đi [-1 đến 1]
-            this.moveVector.set(moveX / maxDist, moveY / maxDist);
-        });
-
-        const resetJoystick = () => {
-            if (!joyActive) return;
-            joyActive = false;
-            joystickInner.style.transform = `translate(0px, 0px)`;
-            this.moveVector.set(0, 0);
+        const releasePointer = (e) => {
+            if (e.pointerId === joyPointerId) {
+                joyActive = false;
+                joyPointerId = null;
+                joyInner.style.transform = `translate(0px, 0px)`;
+                this.moveVector.set(0, 0);
+            }
+            if (e.pointerId === lookPointerId) {
+                lookPointerId = null;
+            }
         };
 
-        window.addEventListener('pointerup', resetJoystick);
-        window.addEventListener('pointercancel', resetJoystick);
+        window.addEventListener('pointerup', releasePointer);
+        window.addEventListener('pointercancel', releasePointer);
     }
 
     jump() {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
-            this.player.velocity.y = 0.15; // Lực nhảy
+            this.player.velocity.y = 0.15;
         }
     }
 
-    updatePhysics() {
-        // Xử lý trọng lực và nhảy
+    update() {
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
-            this.player.velocity.y -= 0.01; // Trọng lực kéo xuống
-
+            this.player.velocity.y -= 0.01;
             if (this.player.position.y <= 2.5) {
                 this.player.position.y = 2.5;
                 this.player.isJumping = false;
@@ -254,48 +239,42 @@ class MinecraftJoystickGame {
             }
         }
 
-        // Hướng nhìn camera
-        this.phi = THREE.MathUtils.degToRad(90 - this.lat);
-        this.theta = THREE.MathUtils.degToRad(this.lon);
+        const phi = THREE.MathUtils.degToRad(90 - this.lat);
+        const theta = THREE.MathUtils.degToRad(this.lon);
 
-        const dir = new THREE.Vector3();
-        dir.x = Math.sin(this.phi) * Math.sin(this.theta);
-        dir.y = 0;
-        dir.z = Math.sin(this.phi) * Math.cos(this.theta);
-        dir.normalize();
+        const dir = new THREE.Vector3(
+            Math.sin(phi) * Math.sin(theta),
+            0,
+            Math.sin(phi) * Math.cos(theta)
+        ).normalize();
 
-        const sideDir = new THREE.Vector3(-dir.z, 0, dir.x);
+        const side = new THREE.Vector3(-dir.z, 0, dir.x);
 
-        // Di chuyển dựa trên độ kéo của joystick (moveVector.y: tiến/lùi, moveVector.x: trái/phải)
         if (this.moveVector.lengthSq() > 0) {
             this.player.position.addScaledVector(dir, -this.moveVector.y * this.player.speed);
-            this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
+            this.player.position.addScaledVector(side, this.moveVector.x * this.player.speed);
         }
 
-        // Cập nhật hướng nhìn thực tế của camera
-        const target = new THREE.Vector3();
-        target.x = this.camera.position.x + 10 * Math.sin(this.phi) * Math.sin(this.theta);
-        target.y = this.camera.position.y + 10 * Math.cos(this.phi);
-        target.z = this.camera.position.z + 10 * Math.sin(this.phi) * Math.cos(this.theta);
+        const target = new THREE.Vector3(
+            this.camera.position.x + 10 * Math.sin(phi) * Math.sin(theta),
+            this.camera.position.y + 10 * Math.cos(phi),
+            this.camera.position.z + 10 * Math.sin(phi) * Math.sin(theta)
+        );
         this.camera.lookAt(target);
     }
 
-    showError(error) {
-        document.body.innerHTML = `<div style="color:red; padding:20px; font-family:monospace;">
-            <h3>❌ Lỗi Game</h3>
-            <p>${error.message}</p>
-        </div>`;
-        console.error(error);
+    showError(err) {
+        document.body.innerHTML = `<h3 style="color:red">Lỗi: ${err.message}</h3>`;
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        this.updatePhysics();
+        this.update();
         this.renderer.render(this.scene, this.camera);
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new MinecraftJoystickGame();
+    new StableMinecraftGame();
 });
             
