@@ -1,11 +1,11 @@
-class FixedMinecraftGame {
+class PerfectMinecraftGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
             this.initControls();
             this.animate();
-            console.log("🟢 Khởi tạo game hoàn hảo: Cố định góc nhìn & Vuốt mượt mà!");
+            console.log("🟢 Khởi tạo game hoàn hảo: Xoay và di chuyển 360 độ cực mượt!");
         } catch (error) {
             this.showError(error);
         }
@@ -68,7 +68,6 @@ class FixedMinecraftGame {
             isJumping: false
         };
 
-        // Góc quay mặc định nhìn về phía trước
         this.lon = 0;
         this.lat = 0;
         this.moveVector = new THREE.Vector2(0, 0);
@@ -84,7 +83,7 @@ class FixedMinecraftGame {
         ui.style.pointerEvents = 'none';
         document.body.appendChild(ui);
 
-        // --- 1. NÚT BẤM PHẢI (ĐỔI, NHẢY, ĐẶT, ĐẬP) ---
+        // --- 1. NÚT BẤM PHẢI ---
         const btnBox = document.createElement('div');
         btnBox.style.position = 'absolute';
         btnBox.style.right = '20px';
@@ -119,7 +118,7 @@ class FixedMinecraftGame {
         });
         ui.appendChild(btnBox);
 
-        // --- 2. JOYSTICK TRÁI (VÒNG TO + VÒNG NHỎ) ---
+        // --- 2. JOYSTICK TRÁI ---
         const outerSize = 120;
         const innerSize = 50;
 
@@ -163,13 +162,17 @@ class FixedMinecraftGame {
             e.stopPropagation();
         });
 
-        // --- 3. XOAY MÀN HÌNH BẰNG CÁCH VUỐT (SIÊU MƯỢT, CHỐNG ĐƠ) ---
+        // --- 3. XOAY MÀN HÌNH TOÀN MÀN HÌNH (TRỪ JOYSTICK VÀ NÚT BẤM) ---
         let lookPointerId = null;
         let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
-            // Chạm bất cứ vùng trống nào bên phải màn hình để vuốt xoay
-            if (e.clientX > window.innerWidth * 0.35 && lookPointerId === null && !joyActive) {
+            // Không nhận diện vùng joystick (khoảng góc dưới bên trái)
+            if (e.clientX < 180 && e.clientY > window.innerHeight - 180) return;
+            // Không nhận diện vùng nút bấm phải
+            if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 160) return;
+
+            if (lookPointerId === null && !joyActive) {
                 lookPointerId = e.pointerId;
                 lastX = e.clientX;
                 lastY = e.clientY;
@@ -177,7 +180,6 @@ class FixedMinecraftGame {
         });
 
         window.addEventListener('pointermove', (e) => {
-            // Xử lý kéo Joystick
             if (joyActive && e.pointerId === joyPointerId) {
                 const dx = e.clientX - center.x;
                 const dy = e.clientY - center.y;
@@ -192,7 +194,6 @@ class FixedMinecraftGame {
                 this.moveVector.set(mx / maxDist, my / maxDist);
             }
 
-            // Xử lý vuốt xoay màn hình mượt mà
             if (lookPointerId !== null && e.pointerId === lookPointerId) {
                 const dx = e.clientX - lastX;
                 const dy = e.clientY - lastY;
@@ -240,11 +241,9 @@ class FixedMinecraftGame {
             }
         }
 
-        // Tính toán hướng nhìn camera từ góc quay lon/lat
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
 
-        // Vector hướng nhìn chuẩn xác của camera
         const forwardDir = new THREE.Vector3(
             Math.sin(phi) * Math.sin(theta),
             0,
@@ -253,17 +252,16 @@ class FixedMinecraftGame {
 
         const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
-        // Di chuyển nhân vật dựa theo Joystick mà KHÔNG làm thay đổi hướng nhìn camera
+        // Di chuyển mượt mà cả 4 hướng (tiến, lùi, trái, phải) dựa trên góc nhìn hiện tại
         if (this.moveVector.lengthSq() > 0) {
             this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
             this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
         }
 
-        // Cập nhật điểm nhìn (Target) của camera theo góc xoay vuốt màn hình
         const target = new THREE.Vector3(
             this.camera.position.x + 10 * Math.sin(phi) * Math.sin(theta),
             this.camera.position.y + 10 * Math.cos(phi),
-            this.camera.position.z + 10 * Math.sin(phi) * Math.sin(theta)
+            this.camera.position.z + 10 * Math.sin(phi) * Math.cos(theta)
         );
         this.camera.lookAt(target);
     }
@@ -280,6 +278,6 @@ class FixedMinecraftGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new FixedMinecraftGame();
+    new PerfectMinecraftGame();
 });
-        
+            
