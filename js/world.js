@@ -3,32 +3,27 @@ import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
 export class World {
     constructor(scene) {
         this.scene = scene;
-        this.blocks = new Map(); // Lưu trữ từng block theo tọa độ x, y, z
-        this.generateChunkBlocks();
+        this.blocks = new Map();
+        this.generateTerrain();
     }
 
     getKey(x, y, z) {
         return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
     }
 
-    generateChunkBlocks() {
-        // Tạo một khoảng rộng các khối block 1x1x1 tách biệt chuẩn phong cách Minecraft
-        const size = 4; // Bán kính vùng đất
-        for (let x = -size; x <= size; x++) {
-            for (let z = -size; z <= size; z++) {
-                // Tầng trên cùng là Cỏ
-                this.createSingleBlock(x, 0, z, BLOCK_TYPES.GRASS);
-                // Tầng giữa là Đất
-                this.createSingleBlock(x, -1, z, BLOCK_TYPES.DIRT);
-                // Tầng dưới đáy là Đá
-                this.createSingleBlock(x, -2, z, BLOCK_TYPES.STONE);
-                this.createSingleBlock(x, -3, z, BLOCK_TYPES.STONE);
+    generateTerrain() {
+        const radius = 2; // Tạo bãi đất vừa phải, gọn gàng, không quá tải mobile
+        for (let x = -radius; x <= radius; x++) {
+            for (let z = -radius; z <= radius; z++) {
+                this.createBlock(x, 0, z, BLOCK_TYPES.GRASS);
+                this.createBlock(x, -1, z, BLOCK_TYPES.DIRT);
+                this.createBlock(x, -2, z, BLOCK_TYPES.STONE);
             }
         }
-        console.log(`🧱 Đã khởi tạo xong ${this.blocks.size} khối block riêng biệt.`);
+        console.log(`🌍 Đã tạo xong ${this.blocks.size} khối block riêng biệt.`);
     }
 
-    createSingleBlock(x, y, z, type) {
+    createBlock(x, y, z, type) {
         const key = this.getKey(x, y, z);
         if (this.blocks.has(key)) return;
 
@@ -37,10 +32,7 @@ export class World {
         const mesh = new THREE.Mesh(geometry, material);
 
         mesh.position.set(x, y, z);
-        mesh.userData = { x, y, z, type };
-
         this.scene.add(mesh);
         this.blocks.set(key, mesh);
     }
 }
-
