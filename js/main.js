@@ -1,11 +1,11 @@
-class PerfectMinecraftGame {
+class OptimizedMinecraftGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
             this.initControls();
             this.animate();
-            console.log("🟢 Khởi tạo game hoàn hảo: Xoay và di chuyển 360 độ cực mượt!");
+            console.log("🟢 Clean Stable Build: Touch camera đã được tối ưu siêu mượt!");
         } catch (error) {
             this.showError(error);
         }
@@ -42,14 +42,12 @@ class PerfectMinecraftGame {
     }
 
     initWorld() {
-        // Nền tảng mặt đất
         const groundGeo = new THREE.BoxGeometry(40, 1, 40);
         const groundMat = new THREE.MeshBasicMaterial({ color: 0x559933 });
         this.ground = new THREE.Mesh(groundGeo, groundMat);
         this.ground.position.set(0, -1, 0);
         this.scene.add(this.ground);
 
-        // Khối block làm mốc
         for (let i = -3; i <= 3; i += 2) {
             const box = new THREE.Mesh(
                 new THREE.BoxGeometry(1, 1, 1),
@@ -70,6 +68,11 @@ class PerfectMinecraftGame {
 
         this.lon = 0;
         this.lat = 0;
+        
+        // Biến delta lưu dồn thay đổi góc quay để mượt hơn trong animate loop
+        this.targetLon = 0;
+        this.targetLat = 0;
+
         this.moveVector = new THREE.Vector2(0, 0);
 
         // UI Container
@@ -162,14 +165,12 @@ class PerfectMinecraftGame {
             e.stopPropagation();
         });
 
-        // --- 3. XOAY MÀN HÌNH TOÀN MÀN HÌNH (TRỪ JOYSTICK VÀ NÚT BẤM) ---
+        // --- 3. XOAY MÀN HÌNH SIÊU TỐI ƯU (KHÔNG TẠO OBJECT, XỬ LÝ NHẸ NHÀNG) ---
         let lookPointerId = null;
         let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
-            // Không nhận diện vùng joystick (khoảng góc dưới bên trái)
             if (e.clientX < 180 && e.clientY > window.innerHeight - 180) return;
-            // Không nhận diện vùng nút bấm phải
             if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 160) return;
 
             if (lookPointerId === null && !joyActive) {
@@ -198,9 +199,9 @@ class PerfectMinecraftGame {
                 const dx = e.clientX - lastX;
                 const dy = e.clientY - lastY;
 
-                this.lon -= dx * 0.4;
-                this.lat += dy * 0.4;
-                this.lat = Math.max(-85, Math.min(85, this.lat));
+                this.targetLon -= dx * 0.4;
+                this.targetLat += dy * 0.4;
+                this.targetLat = Math.max(-85, Math.min(85, this.targetLat));
 
                 lastX = e.clientX;
                 lastY = e.clientY;
@@ -231,6 +232,10 @@ class PerfectMinecraftGame {
     }
 
     update() {
+        // Làm mượt góc quay camera bằng nội suy (lerp) nhẹ nhàng
+        this.lon += (this.targetLon - this.lon) * 0.3;
+        this.lat += (this.targetLat - this.lat) * 0.3;
+
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01;
@@ -252,7 +257,6 @@ class PerfectMinecraftGame {
 
         const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
-        // Di chuyển mượt mà cả 4 hướng (tiến, lùi, trái, phải) dựa trên góc nhìn hiện tại
         if (this.moveVector.lengthSq() > 0) {
             this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
             this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
@@ -278,6 +282,6 @@ class PerfectMinecraftGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new PerfectMinecraftGame();
+    new OptimizedMinecraftGame();
 });
-            
+
