@@ -3,33 +3,32 @@ import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
 export class World {
     constructor(scene) {
         this.scene = scene;
-        this.blocks = new Map(); // Lưu trữ danh sách các block theo tọa độ x,y,z
-        this.generateTerrain();
+        this.blocks = new Map(); // Lưu trữ từng block theo tọa độ x, y, z
+        this.generateChunkBlocks();
     }
 
-    // Tạo khóa định danh cho từng block
     getKey(x, y, z) {
         return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
     }
 
-    // Tạo một vùng địa hình phẳng 3D trực quan
-    generateTerrain() {
-        const radius = 3; // Tạo bãi đất rộng 7x7 ô
-        for (let x = -radius; x <= radius; x++) {
-            for (let z = -radius; z <= radius; z++) {
-                // Tầng trên cùng là Cỏ (Grass)
-                this.createBlock(x, 0, z, BLOCK_TYPES.GRASS);
-                // Tầng giữa là Đất (Dirt)
-                this.createBlock(x, -1, z, BLOCK_TYPES.DIRT);
-                // Tầng dưới đáy là Đá (Stone)
-                this.createBlock(x, -2, z, BLOCK_TYPES.STONE);
+    generateChunkBlocks() {
+        // Tạo một khoảng rộng các khối block 1x1x1 tách biệt chuẩn phong cách Minecraft
+        const size = 4; // Bán kính vùng đất
+        for (let x = -size; x <= size; x++) {
+            for (let z = -size; z <= size; z++) {
+                // Tầng trên cùng là Cỏ
+                this.createSingleBlock(x, 0, z, BLOCK_TYPES.GRASS);
+                // Tầng giữa là Đất
+                this.createSingleBlock(x, -1, z, BLOCK_TYPES.DIRT);
+                // Tầng dưới đáy là Đá
+                this.createSingleBlock(x, -2, z, BLOCK_TYPES.STONE);
+                this.createSingleBlock(x, -3, z, BLOCK_TYPES.STONE);
             }
         }
-        console.log(`🌍 Terrain generated successfully. Total 3D blocks: ${this.blocks.size}`);
+        console.log(`🧱 Đã khởi tạo xong ${this.blocks.size} khối block riêng biệt.`);
     }
 
-    // Hàm dựng mesh 3D và đưa vào Scene
-    createBlock(x, y, z, type) {
+    createSingleBlock(x, y, z, type) {
         const key = this.getKey(x, y, z);
         if (this.blocks.has(key)) return;
 
@@ -44,3 +43,4 @@ export class World {
         this.blocks.set(key, mesh);
     }
 }
+
