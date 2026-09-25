@@ -1,22 +1,33 @@
 import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
-import { TerrainGenerator } from './terrain.js';
 
 export class World {
-    constructor(scene, seed = 42) {
+    constructor(scene) {
         this.scene = scene;
-        this.blocks = new Map(); // Lưu trữ block theo khóa "x,y,z"
+        this.blocks = new Map(); // Lưu trữ block theo tọa độ "x,y,z"
         
-        // Khởi tạo và sinh địa hình từ Seed
-        this.terrainGen = new TerrainGenerator(seed);
-        this.terrainGen.generateWorld(this);
+        // Tạo lại mặt phẳng cơ bản ổn định để test
+        this.generateFlatWorld();
     }
 
     getKey(x, y, z) {
         return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
     }
 
-    // Tạo block trực tiếp không qua kiểm tra phức tạp (dùng khi sinh map)
-    createBlockDirect(x, y, z, type) {
+    generateFlatWorld() {
+        // Tạo một lớp nền phẳng ổn định (ví dụ sàn đá/cỏ rộng 10x10)
+        for (let x = -5; x <= 5; x++) {
+            for (let z = -5; z <= 5; z++) {
+                this.addBlock(x, 0, z, BLOCK_TYPES.GRASS);
+                this.addBlock(x, -1, z, BLOCK_TYPES.DIRT);
+                this.addBlock(x, -2, z, BLOCK_TYPES.STONE);
+            }
+        }
+    }
+
+    addBlock(x, y, z, type) {
+        const key = this.getKey(x, y, z);
+        if (this.blocks.has(key)) return; // Đã có block thì bỏ qua
+
         const material = getBlockMaterial(type);
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const mesh = new THREE.Mesh(geometry, material);
@@ -25,18 +36,9 @@ export class World {
         mesh.userData = { type: type };
         
         this.scene.add(mesh);
-        this.blocks.set(this.getKey(x, y, z), mesh);
+        this.blocks.set(key, mesh);
     }
 
-    // Thêm block (khi người chơi đặt block)
-    addBlock(x, y, z, type) {
-        const key = this.getKey(x, y, z);
-        if (this.blocks.has(key)) return; // Đã có block ở đây thì không đặt đè
-
-        this.createBlockDirect(x, y, z, type);
-    }
-
-    // Xóa block (khi người chơi đập block)
     removeBlock(mesh) {
         if (!mesh || !mesh.parent) return;
         
@@ -51,7 +53,6 @@ export class World {
         this.blocks.delete(key);
     }
 
-    // Lấy thông tin block tại tọa độ
     getBlockAt(x, y, z) {
         const key = this.getKey(x, y, z);
         return this.blocks.get(key) || null;
