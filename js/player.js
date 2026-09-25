@@ -6,18 +6,24 @@ export class Player {
         this.ui = ui;
 
         // Vị trí ban đầu
-        this.camera.position.set(0, 3, 5);
+        this.camera.position.set(0, 5, 5);
         this.camera.rotation.order = 'YXZ';
 
         this.moveDir = { x: 0, z: 0 };
-        this.speed = 8.0;
+        this.speed = 5.0; // Tốc độ di chuyển chuẩn Minecraft
         
-        // Biến xử lý trọng lực & nhảy
-        this.gravity = 20.0;
+        // Kích thước hộp va chạm của nhân vật (AABB)
+        this.radius = 0.3;     // Bán kính bề ngang nhân vật
+        this.height = 1.6;     // Chiều cao nhân vật
+        this.eyeHeight = 1.4;  // Khoảng cách từ chân đến mắt
+
+        // Biến vật lý trọng lực & nhảy
+        this.gravity = 25.0;
         this.verticalVelocity = 0;
         this.isGrounded = false;
-        this.playerHeight = 1.6;
+        this.jumpForce = 8.5;
 
+        // Xoay camera cảm ứng
         this.touchScreenX = 0;
         this.touchScreenY = 0;
         this.isSwiping = false;
@@ -77,7 +83,7 @@ export class Player {
         joystickZone.addEventListener('touchend', resetJoystick);
         joystickZone.addEventListener('touchcancel', resetJoystick);
 
-        // Xoay camera bằng cảm ứng (tránh vùng hotbar và nút bấm)
+        // Xoay camera cảm ứng (tránh vùng hotbar và các nút)
         window.addEventListener('touchstart', (e) => {
             const touch = e.touches[0];
             if (touch.clientX > window.innerWidth / 3 && touch.clientY < window.innerHeight - 120) {
@@ -118,7 +124,7 @@ export class Player {
 
     jump() {
         if (this.isGrounded) {
-            this.verticalVelocity = 8.0; // Lực nhảy lên
+            this.verticalVelocity = this.jumpForce;
             this.isGrounded = false;
         }
     }
@@ -138,45 +144,133 @@ export class Player {
                 this.world.removeBlock(intersect.object);
             } else if (type === 'place') {
                 const position = intersect.object.position.clone().add(intersect.face.normal);
+                
+                // Kiểm tra không đặt block đè lên vị trí nhân vật đang đứng
+                const playerMinX = this.camera.position.x - this.radius;
+                const playerMaxX = this.camera.position.x + this.radius;
+                const playerMinZ = this.camera.position.z - this.radius;
+                const playerMaxZ = this.camera.position.z + this.radius;
+                const playerMinY = this.camera.position.y - this.eyeHeight;
+                const playerMaxY = this.camera.position.y + (this.height - this.eyeHeight);
+
+                if (!(position.x + 0.5 < playerMinX || position.x - 0.5 > playerMaxX ||
+                      position.y + 0.5 < playerMinY || position.y - 0.5 > playerMaxY ||
+                      position.z + 0.5 < playerMinZ || position.z - 0.5 > playerMaxZ)) {
+                    return; // Đang vướng thân người chơi, không cho đặt
+                }
+
                 const selectedType = this.ui.getSelectedBlock();
                 this.world.addBlock(position.x, position.y, position.z, selectedType);
             }
         }
     }
 
+    // Kiểm tra xem vị trí (x, y, z) có chạm block nào không
+    checkCollision(x, y, z) {
+        const minX = x - this.radius;
+        const maxX = x + this.radius;
+        const minZ = z - this.radius;
+        const maxZ = z + this.radius;
+        const minY = y - this.eyeHeight;
+        const maxY = y + (this.height - this.eyeHeight);
+
+        // Quét các ô xung quanh vị trí nhân vật
+        const startX = Math.floor(minX);
+        const endX = Math.floor(maxX);
+        const startY = Math.floor(minY);
+        const endY = Math.floor(maxY);
+        const startZ = Math.floor(minZ);
+        const endZ = Math.floor(maxZ);
+
+        for (let bx = startX; bx <= endX; bx++) {
+            for (let by = startY; by <= endY; by++) {
+                for (let bz = startZ; bz <= endZ; bz++) {
+                    const block = this.world.getBlockAt(bx, by, bz);
+                    if (block) {
+                        // Kiểm tra va chạm hộp AABB
+                        const bMinX = bx - 0.5, bMaxX = bx + 0.5;
+                        const bMinY = by - 0.5, bMaxY = by + 0.5;
+                        const bMinZ = bz - 0.5, bMaxZ = bz + 0.5;
+
+                        if (maxX > bMinX && minX < bMaxX &&
+                            maxY > bMinY && minY < bMaxY &&
+                            maxZ > bMinZ && minZ < bMaxZ) {
+                            return true; // Có va chạm
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     update(delta) {
-        // 1. Di chuyển ngang
+        if (delta > 0.1) delta = 0.1; // Chống giật lag khung hình
+
+        // 1. Tính toán vector hướng di chuyển ngang
+        let moveVector = new THREE.Vector3();
         if (this.moveDir.x !== 0 || this.moveDir.z !== 0) {
             const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.euler.y);
             const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.euler.y);
 
-            const moveVector = new THREE.Vector3();
             moveVector.addScaledVector(forward, -this.moveDir.z);
             moveVector.addScaledVector(right, this.moveDir.x);
             moveVector.normalize();
-
-            this.camera.position.addScaledVector(moveVector, this.speed * delta);
         }
 
-        // 2. Trọng lực & Xử lý đứng trên mặt đất / bước lên bậc block
+        const horizontalStep = moveVector.clone().multiplyScalar(this.speed * delta);
+
+        // 2. Xử lý va chạm và di chuyển theo trục X
+        if (horizontalStep.x !== 0) {
+            this.camera.position.x += horizontalStep.x;
+            if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
+                // Thử hỗ trợ bước lên bậc block cao 1 đơn vị
+                if (this.isGrounded && !this.checkCollision(this.camera.position.x, this.camera.position.y + 1.0, this.camera.position.z)) {
+                    this.camera.position.y += 1.0; // Bước lên bậc
+                } else {
+                    this.camera.position.x -= horizontalStep.x; // Lùi lại nếu vướng tường
+                }
+            }
+        }
+
+        // 3. Xử lý va chạm và di chuyển theo trục Z
+        if (horizontalStep.z !== 0) {
+            this.camera.position.z += horizontalStep.z;
+            if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
+                // Thử hỗ trợ bước lên bậc block cao 1 đơn vị
+                if (this.isGrounded && !this.checkCollision(this.camera.position.x, this.camera.position.y + 1.0, this.camera.position.z)) {
+                    this.camera.position.y += 1.0; // Bước lên bậc
+                } else {
+                    this.camera.position.z -= horizontalStep.z; // Lùi lại nếu vướng tường
+                }
+            }
+        }
+
+        // 4. Trọng lực & Xử lý va chạm theo trục Y (Rơi / Nhảy)
         this.verticalVelocity -= this.gravity * delta;
-        this.camera.position.y += this.verticalVelocity * delta;
+        const verticalStep = this.verticalVelocity * delta;
 
-        // Kiểm tra va chạm mặt đất đơn giản (mặt đất chuẩn ở y = 0.5)
-        const groundLevel = 1.5; // Chiều cao mắt nhân vật so với mặt đất block
-        
-        // Quét tìm block ngay dưới chân nhân vật
-        const blockUnder = this.world.getBlockAt(this.camera.position.x, this.camera.position.y - this.playerHeight, this.camera.position.z);
-        
-        let targetGroundY = 1.5; // Mặc định mặt đất cơ bản
-        if (blockUnder) {
-            targetGroundY = blockUnder.position.y + 1.5; // Đứng trên bề mặt block đó
-        }
-
-        if (this.camera.position.y <= targetGroundY) {
-            this.camera.position.y = targetGroundY;
-            this.verticalVelocity = 0;
-            this.isGrounded = true;
+        if (verticalStep !== 0) {
+            this.camera.position.y += verticalStep;
+            if (this.checkCollision(this.camera.position.x, this.camera.position.y, this.camera.position.z)) {
+                if (this.verticalVelocity < 0) {
+                    // Rơi chạm đất: ép sát bề mặt block phía dưới
+                    this.camera.position.y -= verticalStep;
+                    // Tìm đúng vị trí mặt block phía dưới chân để đứng khớp
+                    const currentFootY = this.camera.position.y - this.eyeHeight;
+                    const blockY = Math.floor(currentFootY);
+                    this.camera.position.y = blockY + 0.5 + this.eyeHeight;
+                    this.isGrounded = true;
+                } else {
+                    // Nhảy chạm trần nhà: khựng lại không đi xuyên qua
+                    this.camera.position.y -= verticalStep;
+                }
+                this.verticalVelocity = 0;
+            } else {
+                // Kiểm tra nếu lơ lửng trên không
+                this.isGrounded = false;
+            }
         }
     }
-}
+                        }
+
