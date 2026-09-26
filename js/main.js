@@ -21,7 +21,7 @@ class Checkpoint5Step1Game {
             this.maxYObserved = -999;
 
             this.animate();
-            console.log("🟢 Đã áp dụng 3 thay đổi fix Jitter theo lệnh Hội Đồng!");
+            console.log("🟢 Đã cập nhật Hysteresis 2 ngưỡng vị trí theo lệnh Hội Đồng!");
         } catch (error) {
             this.showError(error);
         }
@@ -444,7 +444,7 @@ class Checkpoint5Step1Game {
             }
         }
 
-        // 3. Y Collision & Grounded State (ĐÃ ÁP DỤNG 3 THAY ĐỔI CỦA HỘI ĐỒNG)
+        // 3. Y Collision & Grounded State (Áp dụng Hysteresis 2 ngưỡng vị trí)
         const nextYPos = this.player.position.clone();
         nextYPos.y += this.player.velocity.y * dt;
 
@@ -462,22 +462,29 @@ class Checkpoint5Step1Game {
         } else {
             this.player.position.y = nextYPos.y;
             
-            // THAY ĐỔI 1: Giảm epsilon check ground xuống 0.001
-            const groundCheck = this.player.position.clone();
-            groundCheck.y -= 0.001;
-            
-            // THAY ĐỔI 3: Thêm Hysteresis chống lật trạng thái isGrounded
-            const stillGrounded = this.playerPhysics.checkCollision(groundCheck);
-            if (!stillGrounded && this.player.isGrounded) {
-                if (this.player.velocity.y < -0.05) {
+            // Check CHẶT: player có đang chạm mặt block không?
+            const tightCheck = this.player.position.clone();
+            tightCheck.y -= 0.001;
+            const tightGrounded = this.playerPhysics.checkCollision(tightCheck);
+
+            if (tightGrounded) {
+                // Đang chạm mặt → grounded ngay
+                this.player.isGrounded = true;
+            } else {
+                // Check RỘNG: player còn gần mặt block không? (vùng đệm)
+                const looseCheck = this.player.position.clone();
+                looseCheck.y -= 0.05;
+                const looseGrounded = this.playerPhysics.checkCollision(looseCheck);
+                
+                if (this.player.isGrounded && looseGrounded) {
+                    // Đang trong vùng đệm → giữ grounded (chống flicker)
+                    // Giữ nguyên isGrounded = true
+                } else {
+                    // Rời hẳn mặt đất → tắt grounded NGAY → gravity bật
                     this.player.isGrounded = false;
                 }
-            } else {
-                this.player.isGrounded = stillGrounded;
             }
         }
-        
-        // (ĐÃ XÓA THAY ĐỔI 2: Đoạn snap trùng lặp ở dòng 541-549 cũ đã được triệt tiêu hoàn toàn)
 
         // Ghi nhận min/max phục vụ xuất log
         if (this.player.isGrounded) {
@@ -500,7 +507,7 @@ class Checkpoint5Step1Game {
         if (this.logTimer === 180) {
             const deltaY = (this.maxYObserved - this.minYObserved).toFixed(6);
             console.log(
-`[FIX REPORT HỘI ĐỒNG]
+`[FIX REPORT HỘI ĐỒNG - 2 NGƯỠNG VỊ TRÍ]
 - player.y min = ${this.minYObserved.toFixed(6)}
 - player.y max = ${this.maxYObserved.toFixed(6)}
 - DeltaY = ${deltaY}
