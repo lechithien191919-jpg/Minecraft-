@@ -1,5 +1,6 @@
 import { createBlockInteraction } from './blockInteraction.js';
 import { createPlayerPhysics } from './playerPhysics.js';
+import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
 
 class Checkpoint5Step1Game {
     constructor() {
@@ -12,7 +13,7 @@ class Checkpoint5Step1Game {
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 Chống đi xuyên block & Hạ chiều cao camera thành công!");
+            console.log("🟢 Đã liên kết blocks.js, chiều cao 1.5 block & leo block thấp thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -23,8 +24,8 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Hạ camera xuống chuẩn mực mắt player (y = 1.7)
-        this.camera.position.set(0, 1.7, 5);
+        // Hạ camera xuống chuẩn 1.5 block (mắt ở y = 1.25)
+        this.camera.position.set(0, 1.25, 5);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -54,62 +55,7 @@ class Checkpoint5Step1Game {
         });
     }
 
-    createBlockMaterials() {
-        const createPixelTexture = (drawCallback) => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 16;
-            canvas.height = 16;
-            const ctx = canvas.getContext('2d');
-            drawCallback(ctx);
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.magFilter = THREE.NearestFilter;
-            texture.minFilter = THREE.NearestFilter;
-            return texture;
-        };
-
-        const dirtTex = createPixelTexture(ctx => {
-            ctx.fillStyle = '#8B5A2B';
-            ctx.fillRect(0, 0, 16, 16);
-            ctx.fillStyle = '#6F441F';
-            for(let i=0; i<20; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-        });
-
-        const grassTopTex = createPixelTexture(ctx => {
-            ctx.fillStyle = '#559933';
-            ctx.fillRect(0, 0, 16, 16);
-            ctx.fillStyle = '#448822';
-            for(let i=0; i<15; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-        });
-
-        const grassSideTex = createPixelTexture(ctx => {
-            ctx.fillStyle = '#8B5A2B';
-            ctx.fillRect(0, 0, 16, 16);
-            ctx.fillStyle = '#559933';
-            ctx.fillRect(0, 0, 16, 5);
-            ctx.fillRect(2, 5, 1, 2);
-            ctx.fillRect(5, 5, 2, 3);
-            ctx.fillRect(10, 5, 1, 2);
-            ctx.fillRect(13, 5, 2, 1);
-        });
-
-        const stoneTex = createPixelTexture(ctx => {
-            ctx.fillStyle = '#808080';
-            ctx.fillRect(0, 0, 16, 16);
-            ctx.fillStyle = '#606060';
-            for(let i=0; i<25; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-        });
-
-        return {
-            dirt: new THREE.MeshLambertMaterial({ map: dirtTex }),
-            stone: new THREE.MeshLambertMaterial({ map: stoneTex }),
-            grass: [
-                grassSideTex, grassSideTex, grassTopTex, dirtTex, grassSideTex, grassSideTex
-            ].map(tex => new THREE.MeshLambertMaterial({ map: tex }))
-        };
-    }
-
     initWorldManager() {
-        this.materials = this.createBlockMaterials();
         this.blockMeshes = []; 
         this.worldBlocks = new Map(); 
 
@@ -128,7 +74,7 @@ class Checkpoint5Step1Game {
             if (this.worldBlocks.has(key)) return null;
 
             const geo = new THREE.BoxGeometry(1, 1, 1);
-            const mat = this.materials[type] || this.materials.grass;
+            const mat = getBlockMaterial(type);
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y, z);
             mesh.userData = { type, x, y, z };
@@ -160,13 +106,13 @@ class Checkpoint5Step1Game {
         // Tạo mặt đất
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
-                this.addBlock(x, -1, z, 'grass');
+                this.addBlock(x, -1, z, BLOCK_TYPES.GRASS);
             }
         }
         
-        this.addBlock(-2, 0, -5, 'grass');
-        this.addBlock(0, 0, -5, 'dirt');
-        this.addBlock(2, 0, -5, 'stone');
+        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);
+        this.addBlock(0, 0, -5, BLOCK_TYPES.LEAVES);
+        this.addBlock(2, 0, -5, BLOCK_TYPES.STONE);
     }
 
     initRaycasterAndInteraction() {
@@ -214,7 +160,7 @@ class Checkpoint5Step1Game {
     }
 
     initHotbarUI() {
-        this.selectedBlockType = 'grass';
+        this.selectedBlockType = BLOCK_TYPES.GRASS;
 
         const hotbarContainer = document.createElement('div');
         hotbarContainer.style.position = 'fixed';
@@ -222,9 +168,9 @@ class Checkpoint5Step1Game {
         hotbarContainer.style.left = '50%';
         hotbarContainer.style.transform = 'translateX(-50%)';
         hotbarContainer.style.display = 'flex';
-        hotbarContainer.style.gap = '10px';
+        hotbarContainer.style.gap = '6px';
         hotbarContainer.style.background = 'rgba(0, 0, 0, 0.7)';
-        hotbarContainer.style.padding = '10px 15px';
+        hotbarContainer.style.padding = '8px 12px';
         hotbarContainer.style.borderRadius = '12px';
         hotbarContainer.style.zIndex = '9999';
         hotbarContainer.style.touchAction = 'none';
@@ -235,9 +181,11 @@ class Checkpoint5Step1Game {
         });
 
         const items = [
-            { type: 'grass', label: 'GRASS' },
-            { type: 'dirt', label: 'DIRT' },
-            { type: 'stone', label: 'STONE' }
+            { type: BLOCK_TYPES.GRASS, label: 'CỎ', color: '#559933' },
+            { type: BLOCK_TYPES.DIRT, label: 'ĐẤT', color: '#8B5A2B' },
+            { type: BLOCK_TYPES.STONE, label: 'ĐÁ', color: '#7f7f7f' },
+            { type: BLOCK_TYPES.WOOD, label: 'GỖ', color: '#5c4033' },
+            { type: BLOCK_TYPES.LEAVES, label: 'LÁ', color: '#2e8b57' }
         ];
 
         this.hotbarSlots = [];
@@ -245,15 +193,15 @@ class Checkpoint5Step1Game {
         items.forEach((item, index) => {
             const slot = document.createElement('div');
             slot.innerText = item.label;
-            slot.style.width = '70px';
-            slot.style.height = '45px';
-            slot.style.background = index === 0 ? '#448822' : '#333333';
+            slot.style.width = '52px';
+            slot.style.height = '42px';
+            slot.style.background = index === 0 ? item.color : '#333333';
             slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
             slot.style.borderRadius = '6px';
             slot.style.display = 'flex';
             slot.style.alignItems = 'center';
             slot.style.justifyContent = 'center';
-            slot.style.fontSize = '12px';
+            slot.style.fontSize = '11px';
             slot.style.color = '#ffffff';
             slot.style.fontWeight = 'bold';
             slot.style.cursor = 'pointer';
@@ -263,7 +211,7 @@ class Checkpoint5Step1Game {
             slot.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.selectSlot(index, item.type);
+                this.selectSlot(index, item.type, item.color);
             });
 
             hotbarContainer.appendChild(slot);
@@ -273,12 +221,12 @@ class Checkpoint5Step1Game {
         document.body.appendChild(hotbarContainer);
     }
 
-    selectSlot(index, type) {
+    selectSlot(index, type, color) {
         this.selectedBlockType = type;
         this.hotbarSlots.forEach((slot, i) => {
             if (i === index) {
                 slot.style.border = '3px solid #ffff00';
-                slot.style.background = type === 'grass' ? '#448822' : (type === 'dirt' ? '#8B5A2B' : '#707070');
+                slot.style.background = color;
             } else {
                 slot.style.border = '2px solid #ffffff';
                 slot.style.background = '#333333';
@@ -451,6 +399,25 @@ class Checkpoint5Step1Game {
 
     jump() {
         if (!this.player.isJumping) {
+            // Tự động leo block thấp giống Minecraft khi đứng sát bậc
+            const phi = THREE.MathUtils.degToRad(90 - this.lat);
+            const theta = THREE.MathUtils.degToRad(this.lon);
+            const forwardX = -Math.sin(theta) * 0.5;
+            const forwardZ = -Math.cos(theta) * 0.5;
+
+            const stepCheckPos = this.player.position.clone();
+            stepCheckPos.x += forwardX;
+            stepCheckPos.z += forwardZ;
+            stepCheckPos.y += 0.6;
+
+            if (this.hasBlock(Math.round(stepCheckPos.x), Math.round(stepCheckPos.y - 0.5), Math.round(stepCheckPos.z)) &&
+                !this.playerPhysics.checkCollision(stepCheckPos)) {
+                this.player.position.y += 1.0;
+                console.log("🧗 Tự động leo lên block thấp thành công!");
+                return;
+            }
+
+            // Nhảy bình thường
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
         }
@@ -463,8 +430,9 @@ class Checkpoint5Step1Game {
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01;
-            if (this.player.position.y <= 1.7) {
-                this.player.position.y = 1.7;
+            // Mốc hạ cánh theo chiều cao mắt 1.25
+            if (this.player.position.y <= 1.25) {
+                this.player.position.y = 1.25;
                 this.player.isJumping = false;
                 this.player.velocity.y = 0;
             }
@@ -482,28 +450,16 @@ class Checkpoint5Step1Game {
         const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
         if (this.moveVector.lengthSq() > 0) {
-            const moveX = (-forwardDir.z * this.moveVector.x + forwardDir.x * (-this.moveVector.y)) * this.player.speed; // Tính toán vector dịch chuyển
-            
-            // Xử lý di chuyển và kiểm tra va chạm từng trục riêng biệt để trượt mượt mà theo tường
-            const nextPos = this.player.position.clone();
-
-            // Thử dịch chuyển trục X/Z
-            const dx = -forwardDir.z * this.moveVector.x - forwardDir.x * this.moveVector.y;
-            const dz = -forwardDir.x * this.moveVector.x - forwardDir.z * this.moveVector.y; // Simplified
-            
-            // Di chuyển chuẩn theo hướng joystick
             const deltaMove = new THREE.Vector3();
             deltaMove.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
             deltaMove.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
 
-            // Kiểm tra va chạm trục X
             const testX = this.player.position.clone();
             testX.x += deltaMove.x;
             if (!this.playerPhysics.checkCollision(testX)) {
                 this.player.position.x = testX.x;
             }
 
-            // Kiểm tra va chạm trục Z
             const testZ = this.player.position.clone();
             testZ.z += deltaMove.z;
             if (!this.playerPhysics.checkCollision(testZ)) {
@@ -536,4 +492,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-                      
+            
