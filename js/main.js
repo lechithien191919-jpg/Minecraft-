@@ -1,5 +1,5 @@
 import { createBlockInteraction } from './blockInteraction.js';
-import { createPlayerPhysics } from './playerPhysics.js'; // <--- Tích hợp module Physics STEP 1
+import { createPlayerPhysics } from './playerPhysics.js';
 
 class Checkpoint5Step1Game {
     constructor() {
@@ -7,12 +7,12 @@ class Checkpoint5Step1Game {
             this.initThree();
             this.initWorldManager();
             this.initRaycasterAndInteraction(); 
-            this.initPlayerPhysics(); // <--- Khởi tạo module Physics an toàn (Gravity OFF)
+            this.initPlayerPhysics(); 
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 STEP 1: Module playerPhysics đã được tích hợp thành công ở trạng thái an toàn!");
+            console.log("🟢 STEP 1 (Player Height): Đã cập nhật chiều cao AABB và Camera thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -23,7 +23,8 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 3, 5);
+        // Cập nhật vị trí khởi tạo camera phù hợp với mắt player (y = 1.7)
+        this.camera.position.set(0, 1.7, 5);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -186,7 +187,6 @@ class Checkpoint5Step1Game {
     }
 
     initPlayerPhysics() {
-        // Kết nối module physics ở STEP 1 (chưa bật gravity)
         this.playerPhysics = createPlayerPhysics({
             camera: this.camera,
             world: {
@@ -465,8 +465,9 @@ class Checkpoint5Step1Game {
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01;
-            if (this.player.position.y <= 2.5) {
-                this.player.position.y = 2.5;
+            // Cập nhật mốc hạ cánh theo eye height mới (1.7)
+            if (this.player.position.y <= 1.7) {
+                this.player.position.y = 1.7;
                 this.player.isJumping = false;
                 this.player.velocity.y = 0;
             }
