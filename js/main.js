@@ -1,12 +1,13 @@
-class Checkpoint5InteractionGame {
+class Checkpoint6PrecisionGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
+            this.initCrosshair(); // 1. Thêm Crosshair tâm ngắm dấu cộng (+)
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 Checkpoint 5 Block Interaction System đã khởi chạy thành công!");
+            console.log("🟢 Checkpoint 6 Precision & Interaction System đã khởi chạy thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -110,7 +111,7 @@ class Checkpoint5InteractionGame {
         this.scene.add(this.ground);
 
         this.worldBlocks = [];
-        this.blockMeshMap = new Map(); // Dùng để tra cứu nhanh mesh -> object block
+        this.blockMeshMap = new Map();
 
         const blockTypes = ['grass', 'dirt', 'stone'];
         const blockMats = [this.blockMaterials.grass, this.blockMaterials.dirt, this.blockMaterials.stone];
@@ -140,7 +141,25 @@ class Checkpoint5InteractionGame {
         return blockData;
     }
 
-    // --- 1. HOTBAR UI & SELECTION ---
+    // --- 1. CROSSHAIR TÂM NGẮM DẤU CỘNG (+) ---
+    initCrosshair() {
+        const crosshair = document.createElement('div');
+        crosshair.id = 'crosshair';
+        crosshair.innerText = '+';
+        crosshair.style.position = 'fixed';
+        crosshair.style.top = '50%';
+        crosshair.style.left = '50%';
+        crosshair.style.transform = 'translate(-50%, -50%)';
+        crosshair.style.color = 'rgba(255, 255, 255, 0.8)';
+        crosshair.style.fontSize = '24px';
+        crosshair.style.fontWeight = 'bold';
+        crosshair.style.zIndex = '500';
+        crosshair.style.pointerEvents = 'none'; // Không cản trở raycast hay touch event
+        crosshair.style.userSelect = 'none';
+        document.body.appendChild(crosshair);
+    }
+
+    // --- HOTBAR UI & SELECTION (GIỮ NGUYÊN ĐÃ PASS) ---
     initHotbarUI() {
         this.selectedBlockType = 'grass';
 
@@ -157,7 +176,6 @@ class Checkpoint5InteractionGame {
         hotbarContainer.style.zIndex = '9999';
         hotbarContainer.style.pointerEvents = 'auto';
 
-        // Chặn hoàn toàn sự kiện lọt ra ngoài camera
         ['pointerdown', 'pointermove', 'pointerup', 'click', 'touchstart', 'touchend'].forEach(eventType => {
             hotbarContainer.addEventListener(eventType, (e) => e.stopPropagation());
         });
@@ -213,12 +231,13 @@ class Checkpoint5InteractionGame {
         console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
-    // --- 2. RAYCAST BREAK & PLACE ---
+    // --- 2 & 3. RAYCAST ĐẬP & ĐẶT BLOCK CHÍNH XÁC TỪ TÂM CROSSHAIR ---
     breakBlock() {
         const raycaster = new THREE.Raycaster();
-        const centerScreen = new THREE.Vector2(0, 0); // Tâm màn hình
+        const centerScreen = new THREE.Vector2(0, 0); // Tâm màn hình trùng dấu (+)
         raycaster.setFromCamera(centerScreen, this.camera);
 
+        // Lấy tất cả các mesh block hiện có trong thế giới
         const meshes = this.worldBlocks.map(b => b.mesh);
         const intersects = raycaster.intersectObjects(meshes, false);
 
@@ -227,21 +246,18 @@ class Checkpoint5InteractionGame {
             const blockData = this.blockMeshMap.get(hitMesh.uuid);
 
             if (blockData) {
-                // Xóa khỏi Scene
                 this.scene.remove(hitMesh);
                 hitMesh.geometry.dispose();
-                // Nếu material là mảng (grass), dispose từng material
                 if (Array.isArray(hitMesh.material)) {
                     hitMesh.material.forEach(m => m.dispose());
                 } else {
                     hitMesh.material.dispose();
                 }
 
-                // Xóa khỏi danh sách quản lý
                 this.blockMeshMap.delete(hitMesh.uuid);
                 this.worldBlocks = this.worldBlocks.filter(b => b.id !== blockData.id);
 
-                console.log(`⛏️ Đã đập block ID: ${blockData.id} tại vị trọng tâm!`);
+                console.log(`⛏️ Đã đập block ID: ${blockData.id} thành công!`);
             }
         } else {
             console.log("⛏️ Không có block nào trong tầm ngắm để đập!");
@@ -258,15 +274,14 @@ class Checkpoint5InteractionGame {
 
         if (intersects.length > 0) {
             const intersect = intersects[0];
-            // Tính toán vị trí block mới dựa vào mặt chạm (face normal)
-            const position = intersect.point.clone().add(intersect.face.normal.clone().multiplyScalar(0.5));
             
-            // Làm tròn tọa độ về lưới ô vuông (grid 1x1)
+            // Tính toán vị trí block mới dựa vào normal của bề mặt bị nhắm tới
+            const position = intersect.point.clone().add(intersect.face.normal.clone().multiplyScalar(0.5));
             const posX = Math.round(position.x);
             const posY = Math.round(position.y);
             const posZ = Math.round(position.z);
 
-            // Kiểm tra xem vị trí đó đã có block nào chưa
+            // 4. Kiểm tra không đặt trùng vị trí có sẵn
             const existing = this.worldBlocks.some(b => 
                 Math.abs(b.position.x - posX) < 0.1 &&
                 Math.abs(b.position.y - posY) < 0.1 &&
@@ -278,7 +293,7 @@ class Checkpoint5InteractionGame {
                 return;
             }
 
-            // Lấy material tương ứng với block đang chọn ở Hotbar
+            // Lấy material tương ứng với block đang được chọn trên Hotbar
             let mat = this.blockMaterials.grass;
             if (this.selectedBlockType === 'dirt') mat = this.blockMaterials.dirt;
             if (this.selectedBlockType === 'stone') mat = this.blockMaterials.stone;
@@ -290,7 +305,7 @@ class Checkpoint5InteractionGame {
         }
     }
 
-    // --- 3. CONTROLS & MULTITOUCH ĐỘC LẬP ---
+    // --- CONTROLS & MULTITOUCH ĐỘC LẬP (GIỮ NGUYÊN CHECKPOINT 4) ---
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -325,7 +340,7 @@ class Checkpoint5InteractionGame {
         btnBox.style.gap = '8px';
         btnBox.style.pointerEvents = 'auto';
 
-        ['pointerdown', 'pointermove', 'pointerup', 'click'].forEach(eventType => {
+        ['pointerdown', 'pointermove', 'pointerup', 'click', 'touchstart', 'touchend'].forEach(eventType => {
             btnBox.addEventListener(eventType, (e) => e.stopPropagation());
         });
 
@@ -485,16 +500,16 @@ class Checkpoint5InteractionGame {
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
 
-        this.forwardDir = new THREE.Vector3(
+        const forwardDir = new THREE.Vector3(
             Math.sin(phi) * Math.sin(theta),
             0,
             Math.sin(phi) * Math.cos(theta)
         ).normalize();
 
-        const sideDir = new THREE.Vector3(-this.forwardDir.z, 0, this.forwardDir.x);
+        const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
         if (this.moveVector.lengthSq() > 0) {
-            this.player.position.addScaledVector(this.forwardDir, -this.moveVector.y * this.player.speed);
+            this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
             this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
         }
 
@@ -514,13 +529,4 @@ class Checkpoint5InteractionGame {
     animate() {
         requestAnimationFrame(() => this.animate());
         this.update();
-        if (this.renderer && this.scene && this.camera) {
-            this.renderer.render(this.scene, this.camera);
-        }
-    }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5InteractionGame();
-});
-            
+        if (this.render
