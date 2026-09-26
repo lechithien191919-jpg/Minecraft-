@@ -8,10 +8,10 @@ class Checkpoint5FinalGame {
             this.initThree();
             this.initWorldManager();
             this.initBlockHitbox();
+            this.initControls(); // Khởi tạo player trước để raycaster/interaction nhận diện đúng player
             this.initRaycasterAndInteraction(); 
             this.initCrosshair();
             this.initHotbarUI();
-            this.initControls();
             
             this.clock = new THREE.Clock();
             this.animate();
@@ -108,10 +108,10 @@ class Checkpoint5FinalGame {
             }
         }
         
-        // Tạo block mẫu thử nghiệm độ cao (1 tầng và 2 tầng)
-        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  // Cao 1 tầng (Leo được)
+        // Tạo block mẫu thử nghiệm độ cao
+        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  
         this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
-        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  // Cao 2 tầng (Chặn đứng)
+        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  
         this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
     }
 
@@ -120,100 +120,6 @@ class Checkpoint5FinalGame {
             world: { has: this.hasBlock, get: this.getBlock },
             playerRadius: 0.3,
             playerHeight: 1.7
-        });
-    }
-
-    initRaycasterAndInteraction() {
-        this.raycaster = new THREE.Raycaster();
-        this.blockInteraction = createBlockInteraction({
-            scene: this.scene,
-            camera: this.camera,
-            world: {
-                has: this.hasBlock,
-                get: this.getBlock,
-                addBlock: this.addBlock,
-                removeBlock: this.removeBlock
-            },
-            getBlockMeshes: this.getBlockMeshes,
-            raycaster: this.raycaster,
-            isPlayerIntersecting: (bx, by, bz) => {
-                return this.blockHitbox.isPlayerIntersectingBlock(this.player.position, bx, by, bz);
-            }
-        });
-    }
-
-    initCrosshair() {
-        const crosshair = document.createElement('div');
-        crosshair.id = 'crosshair';
-        crosshair.innerText = '+';
-        crosshair.style.position = 'fixed';
-        crosshair.style.top = '50%';
-        crosshair.style.left = '50%';
-        crosshair.style.transform = 'translate(-50%, -50%)';
-        crosshair.style.color = 'rgba(255, 255, 255, 0.9)';
-        crosshair.style.fontSize = '24px';
-        crosshair.style.fontWeight = 'bold';
-        crosshair.style.zIndex = '500';
-        crosshair.style.pointerEvents = 'none';
-        document.body.appendChild(crosshair);
-    }
-
-    initHotbarUI() {
-        this.selectedBlockType = BLOCK_TYPES.GRASS;
-        const hotbarContainer = document.createElement('div');
-        hotbarContainer.style.position = 'fixed';
-        hotbarContainer.style.bottom = '15px';
-        hotbarContainer.style.left = '50%';
-        hotbarContainer.style.transform = 'translateX(-50%)';
-        hotbarContainer.style.display = 'flex';
-        hotbarContainer.style.gap = '6px';
-        hotbarContainer.style.background = 'rgba(0, 0, 0, 0.7)';
-        hotbarContainer.style.padding = '8px 12px';
-        hotbarContainer.style.borderRadius = '12px';
-        hotbarContainer.style.zIndex = '9999';
-        hotbarContainer.style.touchAction = 'none';
-
-        hotbarContainer.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
-
-        const items = [
-            { type: BLOCK_TYPES.GRASS, label: 'CỎ', color: '#559933' },
-            { type: BLOCK_TYPES.DIRT, label: 'ĐẤT', color: '#8B5A2B' },
-            { type: BLOCK_TYPES.STONE, label: 'ĐÁ', color: '#7f7f7f' },
-            { type: BLOCK_TYPES.WOOD, label: 'GỖ', color: '#5c4033' },
-            { type: BLOCK_TYPES.LEAVES, label: 'LÁ', color: '#2e8b57' }
-        ];
-
-        this.hotbarSlots = [];
-        items.forEach((item, index) => {
-            const slot = document.createElement('div');
-            slot.innerText = item.label;
-            slot.style.width = '52px'; slot.style.height = '42px';
-            slot.style.background = index === 0 ? item.color : '#333333';
-            slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
-            slot.style.borderRadius = '6px'; slot.style.display = 'flex';
-            slot.style.alignItems = 'center'; slot.style.justifyContent = 'center';
-            slot.style.fontSize = '11px'; slot.style.color = '#ffffff'; slot.style.fontWeight = 'bold';
-            slot.style.cursor = 'pointer'; slot.style.userSelect = 'none'; slot.style.touchAction = 'none';
-
-            slot.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); e.stopPropagation();
-                this.selectSlot(index, item.type, item.color);
-            });
-
-            hotbarContainer.appendChild(slot);
-            this.hotbarSlots.push(slot);
-        });
-        document.body.appendChild(hotbarContainer);
-    }
-
-    selectSlot(index, type, color) {
-        this.selectedBlockType = type;
-        this.hotbarSlots.forEach((slot, i) => {
-            if (i === index) {
-                slot.style.border = '3px solid #ffff00'; slot.style.background = color;
-            } else {
-                slot.style.border = '2px solid #ffffff'; slot.style.background = '#333333';
-            }
         });
     }
 
@@ -243,8 +149,8 @@ class Checkpoint5FinalGame {
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => this.blockInteraction.placeBlock(this.selectedBlockType) },
-            { text: 'ĐẬP', cb: () => this.blockInteraction.breakBlock() }
+            { text: 'ĐẶT', cb: () => this.blockInteraction && this.blockInteraction.placeBlock(this.selectedBlockType) },
+            { text: 'ĐẬP', cb: () => this.blockInteraction && this.blockInteraction.breakBlock() }
         ];
 
         actions.forEach(item => {
@@ -341,6 +247,99 @@ class Checkpoint5FinalGame {
 
         window.addEventListener('pointerup', releasePointer);
         window.addEventListener('pointercancel', releasePointer);
+    }
+
+    initRaycasterAndInteraction() {
+        this.raycaster = new THREE.Raycaster();
+        this.blockInteraction = createBlockInteraction({
+            scene: this.scene,
+            camera: this.camera,
+            world: {
+                has: this.hasBlock,
+                get: this.getBlock,
+                addBlock: this.addBlock,
+                removeBlock: this.removeBlock
+            },
+            getBlockMeshes: this.getBlockMeshes,
+            raycaster: this.raycaster,
+            player: this.player,          // 👈 Đã truyền player chuẩn xác
+            blockHitbox: this.blockHitbox // 👈 Đã truyền blockHitbox chuẩn xác
+        });
+    }
+
+    initCrosshair() {
+        const crosshair = document.createElement('div');
+        crosshair.id = 'crosshair';
+        crosshair.innerText = '+';
+        crosshair.style.position = 'fixed';
+        crosshair.style.top = '50%';
+        crosshair.style.left = '50%';
+        crosshair.style.transform = 'translate(-50%, -50%)';
+        crosshair.style.color = 'rgba(255, 255, 255, 0.9)';
+        crosshair.style.fontSize = '24px';
+        crosshair.style.fontWeight = 'bold';
+        crosshair.style.zIndex = '500';
+        crosshair.style.pointerEvents = 'none';
+        document.body.appendChild(crosshair);
+    }
+
+    initHotbarUI() {
+        this.selectedBlockType = BLOCK_TYPES.GRASS;
+        const hotbarContainer = document.createElement('div');
+        hotbarContainer.style.position = 'fixed';
+        hotbarContainer.style.bottom = '15px';
+        hotbarContainer.style.left = '50%';
+        hotbarContainer.style.transform = 'translateX(-50%)';
+        hotbarContainer.style.display = 'flex';
+        hotbarContainer.style.gap = '6px';
+        hotbarContainer.style.background = 'rgba(0, 0, 0, 0.7)';
+        hotbarContainer.style.padding = '8px 12px';
+        hotbarContainer.style.borderRadius = '12px';
+        hotbarContainer.style.zIndex = '9999';
+        hotbarContainer.style.touchAction = 'none';
+
+        hotbarContainer.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
+
+        const items = [
+            { type: BLOCK_TYPES.GRASS, label: 'CỎ', color: '#559933' },
+            { type: BLOCK_TYPES.DIRT, label: 'ĐẤT', color: '#8B5A2B' },
+            { type: BLOCK_TYPES.STONE, label: 'ĐÁ', color: '#7f7f7f' },
+            { type: BLOCK_TYPES.WOOD, label: 'GỖ', color: '#5c4033' },
+            { type: BLOCK_TYPES.LEAVES, label: 'LÁ', color: '#2e8b57' }
+        ];
+
+        this.hotbarSlots = [];
+        items.forEach((item, index) => {
+            const slot = document.createElement('div');
+            slot.innerText = item.label;
+            slot.style.width = '52px'; slot.style.height = '42px';
+            slot.style.background = index === 0 ? item.color : '#333333';
+            slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
+            slot.style.borderRadius = '6px'; slot.style.display = 'flex';
+            slot.style.alignItems = 'center'; slot.style.justifyContent = 'center';
+            slot.style.fontSize = '11px'; slot.style.color = '#ffffff'; slot.style.fontWeight = 'bold';
+            slot.style.cursor = 'pointer'; slot.style.userSelect = 'none'; slot.style.touchAction = 'none';
+
+            slot.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                this.selectSlot(index, item.type, item.color);
+            });
+
+            hotbarContainer.appendChild(slot);
+            this.hotbarSlots.push(slot);
+        });
+        document.body.appendChild(hotbarContainer);
+    }
+
+    selectSlot(index, type, color) {
+        this.selectedBlockType = type;
+        this.hotbarSlots.forEach((slot, i) => {
+            if (i === index) {
+                slot.style.border = '3px solid #ffff00'; slot.style.background = color;
+            } else {
+                slot.style.border = '2px solid #ffffff'; slot.style.background = '#333333';
+            }
+        });
     }
 
     jump() {
@@ -482,4 +481,4 @@ class Checkpoint5FinalGame {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5FinalGame();
 });
-            
+                                  
