@@ -1,107 +1,86 @@
-export function createBlockInteraction({ 
-    scene, camera, world, getBlockMeshes, raycaster, 
-    getPlayer, getBlockHitbox // 👈 Nhận callback
-}) {
+// js/blockInteraction.js
+import * as THREE from 'three';
+import { BLOCK_TYPES } from './blocks.js';
+import { EventBus } from './eventBus.js';
 
-    function getTargetBlock() {
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const blockMeshes = getBlockMeshes();
-        const intersects = raycaster.intersectObjects(blockMeshes);
+export function createBlockInteraction({ camera, scene, world, raycaster, hud }) {
+    let selectedBlockType = BLOCK_TYPES.WOOD; // Mặc định loại block đặt là gỗ
 
-        if (intersects.length > 0) {
-            const hit = intersects[0];
-            if (hit.distance < 6) {
-                return {
-                    mesh: hit.object,
-                    point: hit.point,
-                    normal: hit.face.normal,
-                    position: hit.object.position
-                };
-            }
+    // Thiết lập giao diện hoặc phím bấm chọn loại block nếu cần
+    window.setBlockType = (type) => {
+        if (BLOCK_TYPES[type]) {
+            selectedBlockType = BLOCK_TYPES[type];
+            console.log(`🧱 Đã đổi block type sang: ${type}`);
         }
-        return null;
-    }
+    };
 
+    // Hàm đập block (Break Block)
     function breakBlock() {
-        try {
-            console.log('[BREAK] called'); // 👈 Log tạm 1
-            
-            const target = getTargetBlock();
-            console.log('[BREAK] target =', target); // 👈 Log tạm 2
-            
-            if (!target) {
-                console.log('[BREAK] no target, return false'); // 👈 Log tạm 3
-                return false;
-            }
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const intersects = raycaster.intersectObjects(scene.children, true);
 
-            const { x, y, z } = target.position;
-            const success = world.removeBlock(x, y, z);
-            if (success) {
-                console.log(`⛏️ Đã đập block tại (${x}, ${y}, ${z})`);
+        // Lọc các đối tượng là khối voxel trong thế giới
+        const validIntersects = intersects.filter(hit => {
+            return hit.object && hit.object.userData && hit.object.userData.isVoxelWorld;
+        });
+
+        if (validIntersects.length > 0) {
+            const hit = validIntersects[0];
+            if (hit.distance < 6.0) { // Tầm với tối đa
+                const normal = hit.face.normal.clone();
+                normal.transformDirection(hit.object.matrixWorld);
+                normal.round();
+
+                // Tính tọa độ block cần đập
+                const position = hit.point.clone().sub(normal.clone().multiplyScalar(0.5));
+                const x = Math.floor(position.x);
+                const y = Math.floor(position.y);
+                const z = Math.floor(position.z);
+
+                // Lấy thông tin block trước khi xóa để biết loại block (WOOD, LEAVES, v.v.)
+                const targetType = world.get ? world.get(x, y, z) : null;
+
+                // Thực hiện xóa block trong world
+                const success = world.removeBlock ? world.removeBlock(x, y, z) : false;
+
+                if (success) {
+                    console.log(`⛏️ Đã đập block tại (${x}, ${y}, ${z})`);
+                    // Phát sự kiện block bị đập để module itemDrop nhận và sinh vật phẩm
+                    EventBus.emit('block:broken', { x, y, z, type: targetType });
+                }
             }
-            return success;
-        } catch (e) {
-            console.error('[blockInteraction] breakBlock error:', e);
-            return false;
         }
     }
 
-    function placeBlock(blockType) {
-        try {
-            const target = getTargetBlock();
-            if (!target) return false;
+    // Hàm đặt block (Place Block)
+    function placeBlock() {
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const intersects = raycaster.intersectObjects(scene.children, true);
 
-            const normal = target.normal;
-            const pos = target.position;
-            const newX = Math.round(pos.x + normal.x);
-            const newY = Math.round(pos.y + normal.y);
-            const newZ = Math.round(pos.z + normal.z);
+        const validIntersects = intersects.filter(hit => {
+            return hit.object && hit.object.userData && hit.object.userData.isVoxelWorld;
+        });
 
-            if (world.has(newX, newY, newZ)) return false;
+        if (validIntersects.length > 0) {
+            const hit = validIntersects[0];
+            if (hit.distance < 6.0) {
+                const normal = hit.face.normal.clone();
+                normal.transformDirection(hit.object.matrixWorld);
+                normal.round();
 
-            // Lấy giá trị runtime an toàn qua callback
-            const player = getPlayer ? getPlayer() : null;
-            const blockHitbox = getBlockHitbox ? getBlockHitbox() : null;
+                // Tính tọa độ block mới cần đặt (cộng dồn theo hướng pháp tuyến mặt đối diện)
+                const position = hit.point.clone().add(normal.clone().multiplyScalar(0.5));
+                const x = Math.floor(position.x);
+                const y = Math.floor(position.y);
+                const z = Math.floor(position.z);
 
-            if (player && blockHitbox) {
-                const blockMinX = newX - 0.5, blockMaxX = newX + 0.5;
-                const blockMinY = newY - 0.5, blockMaxY = newY + 0.5;
-                const blockMinZ = newZ - 0.5, blockMaxZ = newZ + 0.5;
-
-                const pMinX = player.position.x - blockHitbox.playerRadius;
-                const pMaxX = player.position.x + blockHitbox.playerRadius;
-                const pMinY = player.position.y - blockHitbox.playerHeight;
-                const pMaxY = player.position.y;
-                const pMinZ = player.position.z - blockHitbox.playerRadius;
-                const pMaxZ = player.position.z + blockHitbox.playerRadius;
-
-                const intersectX = (pMinX < blockMaxX) && (pMaxX > blockMinX);
-                const intersectY = (pMinY < blockMaxY) && (pMaxY > blockMinY);
-                const intersectZ = (pMinZ < blockMaxZ) && (pMaxZ > blockMinZ);
-
-                if (intersectX && intersectY && intersectZ) {
-                    const blockTopY = newY + 0.5;
-                    const feetY = player.position.y - blockHitbox.playerHeight;
-                    
-                    if (Math.abs(feetY - blockTopY) < 0.15 && player.velocity.y <= 0.1) {
-                        player.position.y = blockTopY + blockHitbox.playerHeight;
-                        player.velocity.y = 0;
-                        player.isGrounded = true;
-                    } else {
-                        return false; 
+                if (world.addBlock) {
+                    const success = world.addBlock(x, y, z, selectedBlockType);
+                    if (success) {
+                        console.log(`📦 Đã đặt block tại (${x}, ${y}, ${z})`);
                     }
                 }
             }
-
-            const added = world.addBlock(newX, newY, newZ, blockType);
-            if (added) {
-                console.log(`📦 Đã đặt block loại ${blockType} tại (${newX}, ${newY}, ${newZ})`);
-                return true;
-            }
-            return false;
-        } catch (e) {
-            console.error('[blockInteraction] placeBlock error:', e);
-            return false;
         }
     }
 
