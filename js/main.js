@@ -1,11 +1,11 @@
-class Checkpoint3MinecraftGame {
+class Checkpoint3StableWithSmoothCamera {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
             this.initControls();
             this.animate();
-            console.log("🟢 Checkpoint 3: Đã tích hợp Block & Texture với hệ thống điều khiển đa nhiệm!");
+            console.log("🟢 Checkpoint 3 Stable + Smooth Touch Camera đã khởi chạy!");
         } catch (error) {
             this.showError(error);
         }
@@ -29,12 +29,13 @@ class Checkpoint3MinecraftGame {
         canvas.style.width = '100vw';
         canvas.style.height = '100vh';
         canvas.style.zIndex = '1';
+        // AN TOÀN: Chặn gesture mặc định của mobile để tránh bị khựng sự kiện
+        canvas.style.touchAction = 'none';
         document.body.appendChild(canvas);
 
         const light = new THREE.AmbientLight(0xffffff, 1.0);
         this.scene.add(light);
 
-        // Ánh sáng phụ giúp nổi khối block
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(10, 20, 10);
         this.scene.add(dirLight);
@@ -46,9 +47,7 @@ class Checkpoint3MinecraftGame {
         });
     }
 
-    // Tạo Texture đơn giản bằng Canvas để phân biệt rõ Grass (mặt trên/bên/dưới), Dirt, Stone
     createBlockMaterials() {
-        // Hàm tạo canvas texture 16x16 pixel mang phong cách cổ điển
         const createPixelTexture = (drawCallback) => {
             const canvas = document.createElement('canvas');
             canvas.width = 16;
@@ -61,59 +60,43 @@ class Checkpoint3MinecraftGame {
             return texture;
         };
 
-        // 1. Texture Dirt (Đất)
         const dirtTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#8B5A2B';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#6F441F';
-            for(let i=0; i<20; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<20; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
-        // 2. Texture Grass Top (Cỏ mặt trên)
         const grassTopTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#559933';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#448822';
-            for(let i=0; i<15; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<15; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
-        // 3. Texture Grass Side (Cỏ mặt bên)
         const grassSideTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#8B5A2B';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#559933';
-            ctx.fillRect(0, 0, 16, 5); // phần cỏ xanh ở trên
-            // Tạo hiệu ứng lởm chởm cỏ rủ xuống
+            ctx.fillRect(0, 0, 16, 5);
             ctx.fillRect(2, 5, 1, 2);
             ctx.fillRect(5, 5, 2, 3);
             ctx.fillRect(10, 5, 1, 2);
             ctx.fillRect(13, 5, 2, 1);
         });
 
-        // 4. Texture Stone (Đá)
         const stoneTex = createPixelTexture(ctx => {
             ctx.fillStyle = '#808080';
             ctx.fillRect(0, 0, 16, 16);
             ctx.fillStyle = '#606060';
-            for(let i=0; i<25; i++) {
-                ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
-            }
+            for(let i=0; i<25; i++) ctx.fillRect(Math.random()*16, Math.random()*16, 1, 1);
         });
 
         return {
             dirt: new THREE.MeshLambertMaterial({ map: dirtTex }),
             stone: new THREE.MeshLambertMaterial({ map: stoneTex }),
             grass: [
-                grassSideTex, // phải
-                grassSideTex, // trái
-                grassTopTex,  // trên (Grass Top)
-                dirtTex,      // dưới (Dirt)
-                grassSideTex, // trước
-                grassSideTex  // sau
+                grassSideTex, grassSideTex, grassTopTex, dirtTex, grassSideTex, grassSideTex
             ].map(tex => new THREE.MeshLambertMaterial({ map: tex }))
         };
     }
@@ -121,16 +104,13 @@ class Checkpoint3MinecraftGame {
     initWorld() {
         const materials = this.createBlockMaterials();
 
-        // Tạo mặt đất chính bằng khối Grass
         const groundGeo = new THREE.BoxGeometry(40, 1, 40);
         this.ground = new THREE.Mesh(groundGeo, materials.grass);
         this.ground.position.set(0, -1, 0);
         this.scene.add(this.ground);
 
-        // Xây dựng các khối block mẫu (Grass, Dirt, Stone) có ID và tọa độ riêng
         const blockTypes = ['grass', 'dirt', 'stone'];
         const blockMats = [materials.grass, materials.dirt, materials.stone];
-
         this.worldBlocks = [];
 
         let idCounter = 1;
@@ -146,7 +126,6 @@ class Checkpoint3MinecraftGame {
             block.position.set(posX, posY, posZ);
             this.scene.add(block);
 
-            // Lưu thông tin block chuẩn theo yêu cầu (ID, Type, Tọa độ)
             this.worldBlocks.push({
                 id: idCounter++,
                 type: blockTypes[typeIndex],
@@ -170,7 +149,6 @@ class Checkpoint3MinecraftGame {
         this.targetLat = 0;
         this.moveVector = new THREE.Vector2(0, 0);
 
-        // UI Container
         const ui = document.createElement('div');
         ui.style.position = 'fixed';
         ui.style.top = '0';
@@ -260,11 +238,12 @@ class Checkpoint3MinecraftGame {
             e.stopPropagation();
         });
 
-        // --- 3. XOAY MÀN HÌNH ĐỒNG THỜI (ĐA NHIỆM) ---
+        // --- 3. XOAY MÀN HÌNH TỐI ƯU DELTA (KHÔNG KHỰNG, AN TOÀN TUYỆT ĐỐI) ---
         let lookPointerId = null;
         let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
+            // Không bắt sự kiện nếu bấm nhầm vào vùng UI Joystick hoặc nút bấm phải
             if (e.clientX < 180 && e.clientY > window.innerHeight - 180) return;
             if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 160) return;
 
@@ -291,13 +270,15 @@ class Checkpoint3MinecraftGame {
             }
 
             if (lookPointerId !== null && e.pointerId === lookPointerId) {
-                const dx = e.clientX - lastX;
-                const dy = e.clientY - lastY;
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
 
-                this.targetLon -= dx * 0.4;
-                this.targetLat += dy * 0.4;
+                // Cập nhật target rotation mượt mà bằng delta
+                this.targetLon -= deltaX * 0.4;
+                this.targetLat += deltaY * 0.4;
                 this.targetLat = Math.max(-85, Math.min(85, this.targetLat));
 
+                // Cập nhật mốc lastX/lastY liên tục để không bị giật khựng
                 lastX = e.clientX;
                 lastY = e.clientY;
             }
@@ -327,8 +308,9 @@ class Checkpoint3MinecraftGame {
     }
 
     update() {
-        this.lon += (this.targetLon - this.lon) * 0.3;
-        this.lat += (this.targetLat - this.lat) * 0.3;
+        // Lerp mượt mà bám sát ngón tay
+        this.lon += (this.targetLon - this.lon) * 0.4;
+        this.lat += (this.targetLat - this.lat) * 0.4;
 
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
@@ -365,17 +347,20 @@ class Checkpoint3MinecraftGame {
     }
 
     showError(err) {
+        console.error("Lỗi:", err);
         document.body.innerHTML = `<h3 style="color:red">Lỗi: ${err.message}</h3>`;
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
         this.update();
-        this.renderer.render(this.scene, this.camera);
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
     }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint3MinecraftGame();
+    new Checkpoint3StableWithSmoothCamera();
 });
-                      
+                        
