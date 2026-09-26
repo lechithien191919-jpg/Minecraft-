@@ -1,13 +1,13 @@
-class Checkpoint5Step1CrosshairGame {
+class Checkpoint5Step2BreakGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
-            this.initCrosshair(); // 🎯 BƯỚC 1: Chỉ thêm Crosshair UI đơn thuần
+            this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 BƯỚC 1: Crosshair đã được khởi chạy thành công!");
+            console.log("🟢 BƯỚC 2: Hệ thống ĐẬP an toàn đã khởi chạy thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -40,6 +40,10 @@ class Checkpoint5Step1CrosshairGame {
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(10, 20, 10);
         this.scene.add(dirLight);
+
+        // Khởi tạo Raycaster cho việc đập block từ tâm màn hình
+        this.raycaster = new THREE.Raycaster();
+        this.centerScreenVector = new THREE.Vector2(0, 0);
 
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -136,7 +140,6 @@ class Checkpoint5Step1CrosshairGame {
         }
     }
 
-    // --- 🎯 BƯỚC 1: CROSSHAIR UI OVERLAY ---
     initCrosshair() {
         const crosshair = document.createElement('div');
         crosshair.id = 'crosshair';
@@ -149,7 +152,7 @@ class Checkpoint5Step1CrosshairGame {
         crosshair.style.fontSize = '24px';
         crosshair.style.fontWeight = 'bold';
         crosshair.style.zIndex = '500';
-        crosshair.style.pointerEvents = 'none'; // Tuyệt đối không cản trở raycast hay touch event
+        crosshair.style.pointerEvents = 'none';
         crosshair.style.userSelect = 'none';
         document.body.appendChild(crosshair);
     }
@@ -224,6 +227,46 @@ class Checkpoint5Step1CrosshairGame {
         console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
+    // --- ⛏️ HỆ THỐNG ĐẬP BLOCK AN TOÀN (KHÔNG DISPOSE MATERIAL DÙNG CHUNG) ---
+    breakBlock() {
+        if (!this.raycaster || !this.camera || !this.scene) return;
+
+        // Cập nhật raycast từ tâm màn hình
+        this.raycaster.setFromCamera(this.centerScreenVector, this.camera);
+
+        // Lấy danh sách mesh từ các block hiện có trong thế giới
+        const blockMeshes = this.worldBlocks.map(b => b.mesh);
+        const intersects = this.raycaster.intersectObjects(blockMeshes, false);
+
+        // Kiểm tra an toàn: nếu mảng rỗng hoặc không trúng thì bỏ qua
+        if (!intersects || intersects.length === 0) {
+            console.log("⛏️ Raycast không trúng block nào.");
+            return;
+        }
+
+        const hit = intersects[0];
+        const hitMesh = hit.object;
+
+        // Tìm block tương ứng trong mảng quản lý
+        const index = this.worldBlocks.findIndex(b => b.mesh === hitMesh);
+        if (index !== -1) {
+            const targetBlock = this.worldBlocks[index];
+            console.log(`⛏️ Đập thành công block ID: ${targetBlock.id} (${targetBlock.type})`);
+
+            // 1. Gỡ mesh khỏi Scene
+            this.scene.remove(targetBlock.mesh);
+
+            // 2. GIỮ AN TOÀN MATERIAL: Tuyệt đối KHÔNG gọi .dispose() trên mảng material dùng chung!
+            // Chỉ dọn dẹp geometry riêng của mesh đó để tiết kiệm bộ nhớ
+            if (targetBlock.mesh.geometry) {
+                targetBlock.mesh.geometry.dispose();
+            }
+
+            // 3. Xóa khỏi mảng quản lý worldBlocks
+            this.worldBlocks.splice(index, 1);
+        }
+    }
+
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -260,8 +303,8 @@ class Checkpoint5Step1CrosshairGame {
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log(`🧱 Đặt block: ${this.selectedBlockType}`); } },
-            { text: 'ĐẬP', cb: () => { console.log("⛏️ Đập block"); } }
+            { text: 'ĐẶT', cb: () => { console.log("🧱 ĐẶT CHƯA ĐƯỢC PHÉP Ở BƯỚC NÀY"); } },
+            { text: 'ĐẬP', cb: () => { this.breakBlock(); } }
         ];
 
         actions.forEach(item => {
@@ -445,6 +488,6 @@ class Checkpoint5Step1CrosshairGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Step1CrosshairGame();
+    new Checkpoint5Step2BreakGame();
 });
-                    
+            
