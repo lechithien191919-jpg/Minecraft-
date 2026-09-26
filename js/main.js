@@ -1,6 +1,6 @@
 import { createBlockInteraction } from './blockInteraction.js';
 import { createPlayerPhysics } from './playerPhysics.js';
-import { BLOCK_TYPES, getBlockMaterial } from './blocks.js';
+import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
 
 class Checkpoint5Step1Game {
     constructor() {
@@ -13,7 +13,7 @@ class Checkpoint5Step1Game {
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 Đã liên kết blocks.js, chiều cao 1.5 block & leo block thấp thành công!");
+            console.log("🟢 Đã fix hoàn tất va chạm Y, đứng vững trên block & đủ texture 5 loại!");
         } catch (error) {
             this.showError(error);
         }
@@ -24,8 +24,7 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Hạ camera xuống chuẩn 1.5 block (mắt ở y = 1.25)
-        this.camera.position.set(0, 1.25, 5);
+        this.camera.position.set(0, 1.25, 5); // Chiều cao mắt 1.25 (tương ứng player cao 1.5)
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -56,6 +55,7 @@ class Checkpoint5Step1Game {
     }
 
     initWorldManager() {
+        this.materials = createBlockMaterials();
         this.blockMeshes = []; 
         this.worldBlocks = new Map(); 
 
@@ -74,7 +74,7 @@ class Checkpoint5Step1Game {
             if (this.worldBlocks.has(key)) return null;
 
             const geo = new THREE.BoxGeometry(1, 1, 1);
-            const mat = getBlockMaterial(type);
+            const mat = this.materials[type] || this.materials.grass;
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y, z);
             mesh.userData = { type, x, y, z };
@@ -399,7 +399,7 @@ class Checkpoint5Step1Game {
 
     jump() {
         if (!this.player.isJumping) {
-            // Tự động leo block thấp giống Minecraft khi đứng sát bậc
+            // Kiểm tra tự động bước/leo lên block thấp ngay trước mặt
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
             const forwardX = -Math.sin(theta) * 0.5;
@@ -417,7 +417,7 @@ class Checkpoint5Step1Game {
                 return;
             }
 
-            // Nhảy bình thường
+            // Nhảy lên thông thường
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
         }
@@ -427,13 +427,41 @@ class Checkpoint5Step1Game {
         this.lon += (this.targetLon - this.lon) * 0.4;
         this.lat += (this.targetLat - this.lat) * 0.4;
 
+        // Xử lý nhảy và kiểm tra va chạm trục Y (không bị xuyên qua block bên dưới/bên trên)
         if (this.player.isJumping) {
-            this.player.position.y += this.player.velocity.y;
-            this.player.velocity.y -= 0.01;
-            // Mốc hạ cánh theo chiều cao mắt 1.25
-            if (this.player.position.y <= 1.25) {
-                this.player.position.y = 1.25;
-                this.player.isJumping = false;
+            const nextYPos = this.player.position.clone();
+            nextYPos.y += this.player.velocity.y;
+
+            if (this.playerPhysics.checkCollision(nextYPos)) {
+                if (this.player.velocity.y < 0) {
+                    // Rơi chạm mặt trên của block -> Dừng lại và đứng trên block
+                    // Tính chính xác vị trí bề mặt block (mặt trên block có y = Math.round(position.y))
+                    const targetBlockY = Math.round(nextYPos.y - 1.25);
+                    this.player.position.y = (targetBlockY + 0.5) + 1.25; // Chuẩn hóa mặt trên block + eyeHeight
+                    this.player.isJumping = false;
+                    this.player.velocity.y = 0;
+                } else {
+                    // Nhảy đầu đụng trần -> Dừng vận tốc đi lên
+                    this.player.velocity.y = 0;
+                }
+            } else {
+                this.player.position.y = nextYPos.y;
+                this.player.velocity.y -= 0.01; // Trọng lực kéo xuống
+
+                // Mốc chạm mặt đất cơ bản (y = 1.25)
+                if (this.player.position.y <= 1.25) {
+                    this.player.position.y = 1.25;
+                    this.player.isJumping = false;
+                    this.player.velocity.y = 0;
+                }
+            }
+        } else {
+            // Kiểm tra xem có đang lơ lửng không (bước hụt khỏi mép block) để rơi xuống
+            const groundCheckPos = this.player.position.clone();
+            groundCheckPos.y -= 0.05;
+            if (!this.playerPhysics.checkCollision(groundCheckPos) && this.player.position.y > 1.25) {
+                // Bắt đầu rơi tự do nếu đi ra khỏi mép block
+                this.player.isJumping = true;
                 this.player.velocity.y = 0;
             }
         }
@@ -492,4 +520,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-            
+                
