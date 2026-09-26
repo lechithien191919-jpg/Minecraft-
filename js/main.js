@@ -12,7 +12,7 @@ class Checkpoint5Step1Game {
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 STEP 1 (Player Height): Đã cập nhật chiều cao AABB và Camera thành công!");
+            console.log("🟢 Chống đi xuyên block & Hạ chiều cao camera thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -23,7 +23,7 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // Cập nhật vị trí khởi tạo camera phù hợp với mắt player (y = 1.7)
+        // Hạ camera xuống chuẩn mực mắt player (y = 1.7)
         this.camera.position.set(0, 1.7, 5);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
@@ -157,7 +157,7 @@ class Checkpoint5Step1Game {
 
         this.getBlockMeshes = () => this.blockMeshes;
 
-        // Mật độ mặt đất rộng rãi
+        // Tạo mặt đất
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, 'grass');
@@ -284,7 +284,6 @@ class Checkpoint5Step1Game {
                 slot.style.background = '#333333';
             }
         });
-        console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
     initControls() {
@@ -323,7 +322,7 @@ class Checkpoint5Step1Game {
         btnBox.style.touchAction = 'none';
 
         const actions = [
-            { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
+            { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
             { text: 'ĐẶT', cb: () => this.blockInteraction.placeBlock(this.selectedBlockType) },
             { text: 'ĐẬP', cb: () => this.blockInteraction.breakBlock() }
@@ -454,7 +453,6 @@ class Checkpoint5Step1Game {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
-            console.log("🦘 Jump triggered!");
         }
     }
 
@@ -465,7 +463,6 @@ class Checkpoint5Step1Game {
         if (this.player.isJumping) {
             this.player.position.y += this.player.velocity.y;
             this.player.velocity.y -= 0.01;
-            // Cập nhật mốc hạ cánh theo eye height mới (1.7)
             if (this.player.position.y <= 1.7) {
                 this.player.position.y = 1.7;
                 this.player.isJumping = false;
@@ -485,8 +482,33 @@ class Checkpoint5Step1Game {
         const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
         if (this.moveVector.lengthSq() > 0) {
-            this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
-            this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
+            const moveX = (-forwardDir.z * this.moveVector.x + forwardDir.x * (-this.moveVector.y)) * this.player.speed; // Tính toán vector dịch chuyển
+            
+            // Xử lý di chuyển và kiểm tra va chạm từng trục riêng biệt để trượt mượt mà theo tường
+            const nextPos = this.player.position.clone();
+
+            // Thử dịch chuyển trục X/Z
+            const dx = -forwardDir.z * this.moveVector.x - forwardDir.x * this.moveVector.y;
+            const dz = -forwardDir.x * this.moveVector.x - forwardDir.z * this.moveVector.y; // Simplified
+            
+            // Di chuyển chuẩn theo hướng joystick
+            const deltaMove = new THREE.Vector3();
+            deltaMove.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
+            deltaMove.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
+
+            // Kiểm tra va chạm trục X
+            const testX = this.player.position.clone();
+            testX.x += deltaMove.x;
+            if (!this.playerPhysics.checkCollision(testX)) {
+                this.player.position.x = testX.x;
+            }
+
+            // Kiểm tra va chạm trục Z
+            const testZ = this.player.position.clone();
+            testZ.z += deltaMove.z;
+            if (!this.playerPhysics.checkCollision(testZ)) {
+                this.player.position.z = testZ.z;
+            }
         }
 
         const target = new THREE.Vector3(
@@ -514,4 +536,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-            
+                      
