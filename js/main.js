@@ -1,12 +1,12 @@
-class CheckpointHotbarGame {
+class Checkpoint4MultitaskGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
-            this.initHotbarUI(); // Hạng mục A: Hotbar System
-            this.initControls();
+            this.initHotbarUI(); // BƯỚC 1: Hotbar đơn giản, rõ ràng, chắc chắn hiện
+            this.initControls(); // BƯỚC 2: Tách biệt hoàn toàn multitouch (Joystick, Look, Jump độc lập)
             this.animate();
-            console.log("🟢 Hotbar System đã được tích hợp thành công!");
+            console.log("🟢 Checkpoint 4 Multitask Fix đã khởi chạy thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -135,46 +135,48 @@ class CheckpointHotbarGame {
         }
     }
 
-    // --- HẠNG MỤC 1: HOTBAR UI SYSTEM ---
+    // --- BƯỚC 1: HOTBAR HIỂN THỊ RÕ RÀNG (CHẮC CHẮN THẤY) ---
     initHotbarUI() {
-        this.selectedBlockType = 'grass'; // Mặc định chọn block cỏ
+        this.selectedBlockType = 'grass';
 
         const hotbarContainer = document.createElement('div');
         hotbarContainer.style.position = 'fixed';
-        hotbarContainer.style.bottom = '20px';
+        hotbarContainer.style.bottom = '15px';
         hotbarContainer.style.left = '50%';
         hotbarContainer.style.transform = 'translateX(-50%)';
         hotbarContainer.style.display = 'flex';
-        hotbarContainer.style.gap = '8px';
-        hotbarContainer.style.background = 'rgba(0, 0, 0, 0.4)';
-        hotbarContainer.style.padding = '8px';
+        hotbarContainer.style.gap = '10px';
+        hotbarContainer.style.background = 'rgba(0, 0, 0, 0.7)';
+        hotbarContainer.style.padding = '10px 15px';
         hotbarContainer.style.borderRadius = '12px';
-        hotbarContainer.style.zIndex = '20';
-        hotbarContainer.style.pointerEvents = 'auto'; // Cho phép click/touch vào hotbar riêng biệt
+        hotbarContainer.style.zIndex = '9999'; // Đảm bảo nổi lên trên cùng, không bị che
+        hotbarContainer.style.pointerEvents = 'auto';
 
-        // Ngăn chặn sự kiện chạm lọt ra ngoài làm xoay camera
         hotbarContainer.addEventListener('pointerdown', (e) => e.stopPropagation());
         hotbarContainer.addEventListener('pointermove', (e) => e.stopPropagation());
 
         const items = [
-            { type: 'grass', name: '🌱', bg: '#559933' },
-            { type: 'dirt', name: '🟫', bg: '#8B5A2B' },
-            { type: 'stone', name: '🪨', bg: '#808080' }
+            { type: 'grass', label: 'GRASS' },
+            { type: 'dirt', label: 'DIRT' },
+            { type: 'stone', label: 'STONE' }
         ];
 
         this.hotbarSlots = [];
 
         items.forEach((item, index) => {
             const slot = document.createElement('div');
-            slot.style.width = '50px';
-            slot.style.height = '50px';
-            slot.style.background = item.bg;
-            slot.style.border = index === 0 ? '3px solid #fff' : '2px solid rgba(255,255,255,0.4)';
-            slot.style.borderRadius = '8px';
+            slot.innerText = item.label;
+            slot.style.width = '70px';
+            slot.style.height = '45px';
+            slot.style.background = index === 0 ? '#448822' : '#333333';
+            slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
+            slot.style.borderRadius = '6px';
             slot.style.display = 'flex';
             slot.style.alignItems = 'center';
             slot.style.justifyContent = 'center';
-            slot.style.fontSize = '22px';
+            slot.style.fontSize = '12px';
+            slot.style.color = '#ffffff';
+            slot.style.fontWeight = 'bold';
             slot.style.cursor = 'pointer';
             slot.style.userSelect = 'none';
 
@@ -193,11 +195,18 @@ class CheckpointHotbarGame {
     selectSlot(index, type) {
         this.selectedBlockType = type;
         this.hotbarSlots.forEach((slot, i) => {
-            slot.style.border = i === index ? '3px solid #fff' : '2px solid rgba(255,255,255,0.4)';
+            if (i === index) {
+                slot.style.border = '3px solid #ffff00';
+                slot.style.background = type === 'grass' ? '#448822' : (type === 'dirt' ? '#8B5A2B' : '#707070');
+            } else {
+                slot.style.border = '2px solid #ffffff';
+                slot.style.background = '#333333';
+            }
         });
         console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
+    // --- BƯỚC 2: HỆ THỐNG CONTROLS & MULTITOUCH ĐỘC LẬP HOÀN TOÀN ---
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -218,7 +227,7 @@ class CheckpointHotbarGame {
         ui.style.left = '0';
         ui.style.width = '100%';
         ui.style.height = '100%';
-        ui.style.zIndex = '10';
+        ui.style.zIndex = '999';
         ui.style.pointerEvents = 'none';
         document.body.appendChild(ui);
 
@@ -226,30 +235,31 @@ class CheckpointHotbarGame {
         const btnBox = document.createElement('div');
         btnBox.style.position = 'absolute';
         btnBox.style.right = '20px';
-        btnBox.style.bottom = '20px';
+        btnBox.style.bottom = '80px'; // Nâng lên để không chạm hotbar
         btnBox.style.display = 'grid';
-        btnBox.style.gridTemplateColumns = 'repeat(2, 65px)';
-        btnBox.style.gap = '10px';
+        btnBox.style.gridTemplateColumns = 'repeat(2, 60px)';
+        btnBox.style.gap = '8px';
         btnBox.style.pointerEvents = 'auto';
 
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log(`Đặt block loại: ${this.selectedBlockType}`); } },
-            { text: 'ĐẬP', cb: () => { console.log("Đập block"); } }
+            { text: 'ĐẶT', cb: () => { console.log(`🧱 Đặt block: ${this.selectedBlockType}`); } },
+            { text: 'ĐẬP', cb: () => { console.log("⛏️ Đập block"); } }
         ];
 
         actions.forEach(item => {
             const b = document.createElement('button');
             b.innerText = item.text;
-            b.style.width = '65px';
-            b.style.height = '65px';
+            b.style.width = '60px';
+            b.style.height = '60px';
             b.style.borderRadius = '50%';
             b.style.background = 'rgba(0, 0, 0, 0.6)';
             b.style.color = '#fff';
             b.style.border = '2px solid #fff';
             b.style.fontWeight = 'bold';
-            b.addEventListener('click', (e) => {
+            b.style.pointerEvents = 'auto';
+            b.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 item.cb();
             });
@@ -257,14 +267,14 @@ class CheckpointHotbarGame {
         });
         ui.appendChild(btnBox);
 
-        // --- JOYSTICK TRÁI ---
+        // --- JOYSTICK TRÁI (ĐỘC LẬP TỪNG POINTER ID) ---
         const outerSize = 120;
         const innerSize = 50;
 
         const joyOuter = document.createElement('div');
         joyOuter.style.position = 'absolute';
         joyOuter.style.left = '30px';
-        joyOuter.style.bottom = '30px';
+        joyOuter.style.bottom = '80px';
         joyOuter.style.width = `${outerSize}px`;
         joyOuter.style.height = `${outerSize}px`;
         joyOuter.style.borderRadius = '50%';
@@ -292,31 +302,33 @@ class CheckpointHotbarGame {
         const maxDist = 35;
 
         joyOuter.addEventListener('pointerdown', (e) => {
-            if (joyActive) return;
-            joyActive = true;
-            joyPointerId = e.pointerId;
-            const r = joyOuter.getBoundingClientRect();
-            center.x = r.left + r.width / 2;
-            center.y = r.top + r.height / 2;
-            e.stopPropagation();
+            if (!joyActive) {
+                joyActive = true;
+                joyPointerId = e.pointerId;
+                const r = joyOuter.getBoundingClientRect();
+                center.x = r.left + r.width / 2;
+                center.y = r.top + r.height / 2;
+                e.stopPropagation();
+            }
         });
 
-        // --- XOAY MÀN HÌNH ĐÃ PASS MƯỢT MÀ ---
-        let lookPointerId = null;
-        let lastX = 0, lastY = 0;
+        // --- XOAY CAMERA ĐỘC LẬP (HỖ TRỢ MULTITOUCH ĐỒNG THỜI VỚI JOYSTICK) ---
+        let activeLookPointers = new Map(); // Hỗ trợ nhiều ngón tay xoay độc lập nếu cần
 
         window.addEventListener('pointerdown', (e) => {
-            if (e.clientX < 180 && e.clientY > window.innerHeight - 180) return;
-            if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 160) return;
+            // Bỏ qua nếu chạm vào vùng Joystick hoặc vùng nút bấm phải hoặc Hotbar
+            if (e.clientX < 180 && e.clientY > window.innerHeight - 220) return;
+            if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 220) return;
+            if (e.clientY > window.innerHeight - 70) return;
 
-            if (lookPointerId === null && !joyActive) {
-                lookPointerId = e.pointerId;
-                lastX = e.clientX;
-                lastY = e.clientY;
+            // Nếu ngón này không trùng với Joystick pointer đang giữ
+            if (e.pointerId !== joyPointerId) {
+                activeLookPointers.set(e.pointerId, { lastX: e.clientX, lastY: e.clientY });
             }
         });
 
         window.addEventListener('pointermove', (e) => {
+            // Xử lý di chuyển joystick
             if (joyActive && e.pointerId === joyPointerId) {
                 const dx = e.clientX - center.x;
                 const dy = e.clientY - center.y;
@@ -331,16 +343,18 @@ class CheckpointHotbarGame {
                 this.moveVector.set(mx / maxDist, my / maxDist);
             }
 
-            if (lookPointerId !== null && e.pointerId === lookPointerId) {
-                const deltaX = e.clientX - lastX;
-                const deltaY = e.clientY - lastY;
+            // Xử lý xoay camera cho từng ngón tay độc lập trong map
+            if (activeLookPointers.has(e.pointerId)) {
+                const pData = activeLookPointers.get(e.pointerId);
+                const deltaX = e.clientX - pData.lastX;
+                const deltaY = e.clientY - pData.lastY;
 
                 this.targetLon -= deltaX * 0.4;
                 this.targetLat += deltaY * 0.4;
                 this.targetLat = Math.max(-85, Math.min(85, this.targetLat));
 
-                lastX = e.clientX;
-                lastY = e.clientY;
+                pData.lastX = e.clientX;
+                pData.lastY = e.clientY;
             }
         });
 
@@ -351,8 +365,8 @@ class CheckpointHotbarGame {
                 joyInner.style.transform = `translate(0px, 0px)`;
                 this.moveVector.set(0, 0);
             }
-            if (e.pointerId === lookPointerId) {
-                lookPointerId = null;
+            if (activeLookPointers.has(e.pointerId)) {
+                activeLookPointers.delete(e.pointerId);
             }
         };
 
@@ -364,6 +378,7 @@ class CheckpointHotbarGame {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
+            console.log("🦘 Jump triggered!");
         }
     }
 
@@ -420,6 +435,6 @@ class CheckpointHotbarGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new CheckpointHotbarGame();
+    new Checkpoint4MultitaskGame();
 });
             
