@@ -465,4 +465,4 @@ class Checkpoint5Layer0EventTestGame {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Layer0EventTestGame();
 });
-            
+
