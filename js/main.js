@@ -1,4 +1,4 @@
-class Checkpoint5Step1ArchitectureGame {
+class Checkpoint5Step2RaycastTargetGame {
     constructor() {
         try {
             this.initThree();
@@ -6,8 +6,9 @@ class Checkpoint5Step1ArchitectureGame {
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
+            this.initRaycaster(); // Khởi tạo hệ thống Raycast Target cho Step 2
             this.animate();
-            console.log("🟢 STEP 1: No-Dispose Zone & Mobile Event Firewall đã sẵn sàng!");
+            console.log("🟢 STEP 2: Block Target Raycaster đã sẵn sàng!");
         } catch (error) {
             this.showError(error);
         }
@@ -106,18 +107,25 @@ class Checkpoint5Step1ArchitectureGame {
     initWorld() {
         const materials = this.createBlockMaterials();
 
+        // Danh sách block riêng biệt phục vụ Raycast thuần túy theo yêu cầu STEP 2
+        this.blockMeshes = [];
+        this.worldBlocks = [];
+
+        // Tạo mặt đất (cũng đưa vào blockMeshes để test raycast mặt đất nếu muốn, hoặc quản lý block riêng)
         const groundGeo = new THREE.BoxGeometry(40, 1, 40);
         this.ground = new THREE.Mesh(groundGeo, materials.grass);
         this.ground.position.set(0, -1, 0);
+        this.ground.userData = { type: 'grass', x: 0, y: -1, z: 0 };
         this.scene.add(this.ground);
+        this.blockMeshes.push(this.ground);
 
         const blockTypes = ['grass', 'dirt', 'stone'];
         const blockMats = [materials.grass, materials.dirt, materials.stone];
-        this.worldBlocks = [];
 
         let idCounter = 1;
         for (let i = -3; i <= 3; i += 2) {
             const typeIndex = (Math.abs(i) % 3);
+            const typeName = blockTypes[typeIndex];
             const blockGeo = new THREE.BoxGeometry(1, 1, 1);
             const block = new THREE.Mesh(blockGeo, blockMats[typeIndex]);
             
@@ -126,15 +134,63 @@ class Checkpoint5Step1ArchitectureGame {
             const posZ = -5;
 
             block.position.set(posX, posY, posZ);
+            
+            // GẮN DATA CHO BLOCK TRONG userData (Yêu cầu STEP 2)
+            block.userData = {
+                id: idCounter++,
+                type: typeName,
+                x: posX,
+                y: posY,
+                z: posZ
+            };
+
             this.scene.add(block);
+            this.blockMeshes.push(block); // Đưa vào mảng raycast riêng
 
             this.worldBlocks.push({
-                id: idCounter++,
-                type: blockTypes[typeIndex],
+                id: block.userData.id,
+                type: typeName,
                 position: { x: posX, y: posY, z: posZ },
                 mesh: block
             });
         }
+    }
+
+    // --- KHỞI TẠO RAYCASTER CHO STEP 2 ---
+    initRaycaster() {
+        this.raycaster = new THREE.Raycaster();
+        this.screenCenter = new THREE.Vector2(0, 0); // Tâm màn hình chuẩn trong Normalized Device Coordinates
+    }
+
+    // --- HÀM TARGET BLOCK CHUẨN XÁC ---
+    getTargetBlock() {
+        // 1. Raycast từ tâm camera
+        this.raycaster.setFromCamera(this.screenCenter, this.camera);
+
+        // 2. Chỉ kiểm tra intersections trên mảng riêng blockMeshes (KHÔNG raycast toàn scene)
+        const intersects = this.raycaster.intersectObjects(this.blockMeshes, false);
+
+        // 3. Nếu không trúng gì -> trả về null
+        if (intersects.length === 0) {
+            return null;
+        }
+
+        // 4. Lấy hit gần nhất
+        const hit = intersects[0];
+
+        // 5. Kiểm tra hit.object và userData hợp lệ
+        if (!hit || !hit.object || !hit.object.userData) {
+            return null;
+        }
+
+        // 6. Trả về dữ liệu chi tiết theo yêu cầu
+        return {
+            mesh: hit.object,
+            type: hit.object.userData.type || 'unknown',
+            position: hit.object.position.clone(),
+            normal: hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0),
+            distance: hit.distance
+        };
     }
 
     initCrosshair() {
@@ -170,7 +226,6 @@ class Checkpoint5Step1ArchitectureGame {
         hotbarContainer.style.zIndex = '9999';
         hotbarContainer.style.touchAction = 'none';
 
-        // --- MOBILE EVENT FIREWALL CHO HOTBAR ---
         hotbarContainer.addEventListener('pointerdown', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -264,12 +319,11 @@ class Checkpoint5Step1ArchitectureGame {
         btnBox.style.pointerEvents = 'auto';
         btnBox.style.touchAction = 'none';
 
-        // --- MOBILE EVENT FIREWALL CHO CÁC NÚT HÀNH ĐỘNG ---
         const actions = [
             { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (chờ Step 5)"); } },
-            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (chờ Step 3)"); } }
+            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (chờ Step sau)"); } },
+            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (chờ Step sau)"); } }
         ];
 
         actions.forEach(item => {
@@ -283,12 +337,12 @@ class Checkpoint5Step1ArchitectureGame {
             b.style.border = '2px solid #fff';
             b.style.fontWeight = 'bold';
             b.style.pointerEvents = 'auto';
-            b.style.touchAction = 'none'; // Chống Safari delay
+            b.style.touchAction = 'none';
 
             b.addEventListener('pointerdown', (e) => {
-                e.preventDefault();      // 1. Chặn hành vi mặc định
-                e.stopPropagation();     // 2. Chặn bọt sự kiện lên window
-                item.cb();               // 3. Thực thi handler
+                e.preventDefault();
+                e.stopPropagation();
+                item.cb();
             });
 
             btnBox.appendChild(b);
@@ -342,7 +396,6 @@ class Checkpoint5Step1ArchitectureGame {
 
         let activeLookPointers = new Map();
 
-        // Camera drag chỉ lắng nghe trên Canvas/Window ngoài cùng, bị chặn tuyệt đối bởi UI event firewall
         window.addEventListener('pointerdown', (e) => {
             if (e.pointerId !== joyPointerId) {
                 activeLookPointers.set(e.pointerId, { lastX: e.clientX, lastY: e.clientY });
@@ -402,6 +455,9 @@ class Checkpoint5Step1ArchitectureGame {
         }
     }
 
+    // Biến phụ trợ để throttle log raycast tránh ngập console quá mức trong animate loop
+    _lastLogTime = 0;
+
     update() {
         this.lon += (this.targetLon - this.lon) * 0.4;
         this.lat += (this.targetLat - this.lat) * 0.4;
@@ -438,6 +494,22 @@ class Checkpoint5Step1ArchitectureGame {
             this.camera.position.z + 10 * Math.sin(phi) * Math.cos(theta)
         );
         this.camera.lookAt(target);
+
+        // --- KIỂM TRA TARGET BLOCK MỖI FRAME VÀ LOG THEO YÊU CẦU STEP 2 ---
+        const targetBlock = this.getTargetBlock();
+        const now = performance.now();
+        if (now - this._lastLogTime > 300) { // Log mỗi 300ms cho dễ theo dõi
+            this._lastLogTime = now;
+            if (targetBlock) {
+                console.log(`[TARGET] ${targetBlock.type}`, {
+                    position: targetBlock.position,
+                    normal: targetBlock.normal,
+                    distance: parseFloat(targetBlock.distance.toFixed(2))
+                });
+            } else {
+                console.log("[TARGET] none");
+            }
+        }
     }
 
     showError(err) {
@@ -455,6 +527,6 @@ class Checkpoint5Step1ArchitectureGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Step1ArchitectureGame();
+    new Checkpoint5Step2RaycastTargetGame();
 });
-            
+                    
