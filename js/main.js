@@ -2,7 +2,7 @@ import { createBlockInteraction } from './blockInteraction.js';
 import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
 import { TreeGenerator } from './treeGenerator.js';
-import { createItemDrop } from './itemDrop.js'; // <-- Import Item Drop (Đợt 3)
+import { createItemDrop } from './itemDrop.js';
 
 class Checkpoint5FinalGame {
     constructor() {
@@ -14,7 +14,7 @@ class Checkpoint5FinalGame {
             this.initRaycasterAndInteraction(); 
             this.initCrosshair();
             this.initHotbarUI();
-            this.initItemDrop(); // <-- Khởi tạo Item Drop (Đợt 3)
+            this.initItemDrop();
             
             this.clock = new THREE.Clock();
             this.animate();
@@ -114,7 +114,6 @@ class Checkpoint5FinalGame {
         this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  
         this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
 
-        // --- KÍCH HOẠT SINH RỪNG VOXEL (ĐỢT 2) ---
         const worldInterface = {
             has: (x, y, z) => this.hasBlock(x, y, z),
             addBlock: (x, y, z, type) => this.addBlock(x, y, z, type)
@@ -471,7 +470,6 @@ class Checkpoint5FinalGame {
             }
         }
 
-        // Cập nhật Item Drop (Đợt 3)
         if (this.itemDrop && this.player) {
             this.itemDrop.update(dt, this.player.position);
         }
@@ -495,4 +493,12 @@ class Checkpoint5FinalGame {
         requestAnimationFrame(() => this.animate());
         this.update();
         if (this.renderer && this.scene && this.camera) {
-            thi
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    new Checkpoint5FinalGame();
+});
+            
