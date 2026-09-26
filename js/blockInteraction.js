@@ -1,5 +1,4 @@
 // js/blockInteraction.js
-import * as THREE from 'three';
 import { BLOCK_TYPES } from './blocks.js';
 import { EventBus } from './eventBus.js';
 
