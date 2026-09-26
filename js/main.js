@@ -21,7 +21,7 @@ class Checkpoint5Step1Game {
             this.maxYObserved = -999;
 
             this.animate();
-            console.log("🟢 Đã cập nhật Hysteresis 2 ngưỡng vị trí theo lệnh Hội Đồng!");
+            console.log("🟢 Đã cập nhật Skip Update Khi Stable theo lệnh Hội Đồng!");
         } catch (error) {
             this.showError(error);
         }
@@ -411,12 +411,15 @@ class Checkpoint5Step1Game {
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        // 1. Gravity
-        if (!this.player.isGrounded) {
+        // KIỂM TRA TRẠNG THÁI STABLE (ĐỨNG YÊN)
+        const isStable = this.player.isGrounded && Math.abs(this.player.velocity.y) < 0.001;
+
+        // 1. Gravity (chỉ chạy khi không stable)
+        if (!isStable && !this.player.isGrounded) {
             this.player.velocity.y -= 22.0 * dt;
         }
 
-        // 2. X và Z Collision độc lập
+        // 2. X và Z Collision độc lập (luôn chạy)
         if (this.moveVector.lengthSq() > 0) {
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
@@ -444,49 +447,58 @@ class Checkpoint5Step1Game {
             }
         }
 
-        // 3. Y Collision & Grounded State (Áp dụng Hysteresis 2 ngưỡng vị trí)
-        const nextYPos = this.player.position.clone();
-        nextYPos.y += this.player.velocity.y * dt;
-
-        if (this.playerPhysics.checkCollision(nextYPos)) {
-            if (this.player.velocity.y < 0) {
-                const feetY = nextYPos.y - this.playerPhysics.playerHeight;
-                const blockTopY = Math.floor(feetY + 0.5);
-                
-                this.player.position.y = blockTopY + 0.5 + this.playerPhysics.playerHeight;
-                this.player.velocity.y = 0;
-                this.player.isGrounded = true;
-            } else {
-                this.player.velocity.y = 0;
+        // Nếu đang đứng yên mà người chơi di chuyển ngang ra khỏi mép -> mất grounded
+        if (isStable && (this.moveVector.x !== 0 || this.moveVector.y !== 0)) {
+            const checkPos = this.player.position.clone();
+            checkPos.y -= 0.05;
+            if (!this.playerPhysics.checkCollision(checkPos)) {
+                this.player.isGrounded = false;
             }
-        } else {
-            this.player.position.y = nextYPos.y;
-            
-            // Check CHẶT: player có đang chạm mặt block không?
-            const tightCheck = this.player.position.clone();
-            tightCheck.y -= 0.001;
-            const tightGrounded = this.playerPhysics.checkCollision(tightCheck);
+        }
 
-            if (tightGrounded) {
-                // Đang chạm mặt → grounded ngay
-                this.player.isGrounded = true;
-            } else {
-                // Check RỘNG: player còn gần mặt block không? (vùng đệm)
-                const looseCheck = this.player.position.clone();
-                looseCheck.y -= 0.05;
-                const looseGrounded = this.playerPhysics.checkCollision(looseCheck);
-                
-                if (this.player.isGrounded && looseGrounded) {
-                    // Đang trong vùng đệm → giữ grounded (chống flicker)
-                    // Giữ nguyên isGrounded = true
+        // 3. Y Collision & Physics (CHỈ CHẠY KHI KHÔNG STABLE)
+        if (!isStable) {
+            const nextYPos = this.player.position.clone();
+            nextYPos.y += this.player.velocity.y * dt;
+
+            if (this.playerPhysics.checkCollision(nextYPos)) {
+                if (this.player.velocity.y < 0) {
+                    const feetY = nextYPos.y - this.playerPhysics.playerHeight;
+                    const blockTopY = Math.floor(feetY + 0.5);
+                    
+                    this.player.position.y = blockTopY + 0.5 + this.playerPhysics.playerHeight;
+                    this.player.velocity.y = 0;
+                    this.player.isGrounded = true;
                 } else {
-                    // Rời hẳn mặt đất → tắt grounded NGAY → gravity bật
-                    this.player.isGrounded = false;
+                    this.player.velocity.y = 0;
+                }
+            } else {
+                this.player.position.y = nextYPos.y;
+                
+                const tightCheck = this.player.position.clone();
+                tightCheck.y -= 0.001;
+                const tightGrounded = this.playerPhysics.checkCollision(tightCheck);
+
+                if (tightGrounded) {
+                    this.player.isGrounded = true;
+                    if (this.player.velocity.y < 0) {
+                        this.player.velocity.y = 0;
+                    }
+                } else {
+                    const looseCheck = this.player.position.clone();
+                    looseCheck.y -= 0.05;
+                    const looseGrounded = this.playerPhysics.checkCollision(looseCheck);
+                    
+                    if (this.player.isGrounded && looseGrounded) {
+                        // Giữ nguyên grounded trong vùng đệm
+                    } else {
+                        this.player.isGrounded = false;
+                    }
                 }
             }
         }
 
-        // Ghi nhận min/max phục vụ xuất log
+        // Ghi nhận min/max phục vụ xuất log kiểm tra
         if (this.player.isGrounded) {
             if (this.player.position.y < this.minYObserved) this.minYObserved = this.player.position.y;
             if (this.player.position.y > this.maxYObserved) this.maxYObserved = this.player.position.y;
@@ -507,7 +519,7 @@ class Checkpoint5Step1Game {
         if (this.logTimer === 180) {
             const deltaY = (this.maxYObserved - this.minYObserved).toFixed(6);
             console.log(
-`[FIX REPORT HỘI ĐỒNG - 2 NGƯỠNG VỊ TRÍ]
+`[FIX REPORT HỘI ĐỒNG - STABLE SKIP]
 - player.y min = ${this.minYObserved.toFixed(6)}
 - player.y max = ${this.maxYObserved.toFixed(6)}
 - DeltaY = ${deltaY}
@@ -533,4 +545,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-            
+             
