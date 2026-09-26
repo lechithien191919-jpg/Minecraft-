@@ -3,10 +3,12 @@ import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
 import { TreeGenerator } from './treeGenerator.js';
 import { createItemDrop } from './itemDrop.js';
+import { EventBus } from './eventBus.js';
 
 class Checkpoint5FinalGame {
     constructor() {
         try {
+            window.gameInstance = this; // Gắn global instance để các module dễ gọi
             this.initThree();
             this.initWorldManager();
             this.initBlockHitbox();
@@ -18,7 +20,7 @@ class Checkpoint5FinalGame {
             
             this.clock = new THREE.Clock();
             this.animate();
-            console.log("🟢 Đã khởi chạy hệ thống Callback DI và Item Drop thành công!");
+            console.log("🟢 Đã khởi chạy hệ thống Voxel Game thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -73,7 +75,7 @@ class Checkpoint5FinalGame {
             const mat = this.materials[type] || this.materials.grass;
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y, z);
-            mesh.userData = { type, x, y, z };
+            mesh.userData = { type, x, y, z, isVoxelWorld: true };
 
             this.scene.add(mesh);
             this.blockMeshes.push(mesh);
@@ -108,21 +110,17 @@ class Checkpoint5FinalGame {
                 this.addBlock(x, -1, z, BLOCK_TYPES.GRASS);
             }
         }
-        
-        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  
-        this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
-        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  
-        this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
 
         const worldInterface = {
             has: (x, y, z) => this.hasBlock(x, y, z),
-            addBlock: (x, y, z, type) => this.addBlock(x, y, z, type)
+            get: (x, y, z) => this.getBlock(x, y, z),
+            addBlock: (x, y, z, type) => this.addBlock(x, y, z, type),
+            removeBlock: (x, y, z) => this.removeBlock(x, y, z)
         };
 
         const treeGen = new TreeGenerator(worldInterface, 8.0);
         treeGen.generateTrees(15, 5.0);
         this.trees = treeGen.trees;
-        console.log("[MAIN] Đã kích hoạt sinh rừng voxel thành công! Tổng số cây:", treeGen.trees.length);
     }
 
     initBlockHitbox() {
@@ -159,21 +157,35 @@ class Checkpoint5FinalGame {
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => this.blockInteraction && this.blockInteraction.placeBlock(this.selectedBlockType) },
+            { text: 'ĐẶT', cb: () => this.blockInteraction && this.blockInteraction.placeBlock() },
             { text: 'ĐẬP', cb: () => this.blockInteraction && this.blockInteraction.breakBlock() }
         ];
 
         actions.forEach(item => {
             const b = document.createElement('button');
-            b.innerText = item.text; b.style.width = '60px'; b.style.height = '60px';
-            b.style.borderRadius = '50%'; b.style.background = 'rgba(0, 0, 0, 0.6)';
-            b.style.color = '#fff'; b.style.border = '2px solid #fff'; b.style.fontWeight = 'bold';
-            b.style.pointerEvents = 'auto'; b.style.touchAction = 'none';
+            b.innerText = item.text; 
+            b.style.width = '60px'; 
+            b.style.height = '60px';
+            b.style.borderRadius = '50%'; 
+            b.style.background = 'rgba(0, 0, 0, 0.6)';
+            b.style.color = '#fff'; 
+            b.style.border = '2px solid #fff'; 
+            b.style.fontWeight = 'bold';
+            b.style.pointerEvents = 'auto'; 
+            b.style.touchAction = 'none';
+            b.style.userSelect = 'none';
+            b.style.webkitUserSelect = 'none';
 
             b.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); e.stopPropagation();
+                e.preventDefault(); 
+                e.stopPropagation();
                 item.cb();
             });
+
+            b.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+
             btnBox.appendChild(b);
         });
         ui.appendChild(btnBox);
@@ -265,15 +277,12 @@ class Checkpoint5FinalGame {
             scene: this.scene,
             camera: this.camera,
             world: {
-                has: this.hasBlock,
-                get: this.getBlock,
-                addBlock: this.addBlock,
-                removeBlock: this.removeBlock
+                has: (x, y, z) => this.hasBlock(x, y, z),
+                get: (x, y, z) => this.getBlock(x, y, z),
+                addBlock: (x, y, z, type) => this.addBlock(x, y, z, type),
+                removeBlock: (x, y, z) => this.removeBlock(x, y, z)
             },
-            getBlockMeshes: this.getBlockMeshes,
-            raycaster: this.raycaster,
-            getPlayer: () => this.player,
-            getBlockHitbox: () => this.blockHitbox
+            raycaster: this.raycaster
         });
     }
 
@@ -281,8 +290,8 @@ class Checkpoint5FinalGame {
         this.itemDrop = createItemDrop({
             scene: this.scene,
             world: {
-                has: this.hasBlock,
-                get: this.getBlock
+                has: (x, y, z) => this.hasBlock(x, y, z),
+                get: (x, y, z) => this.getBlock(x, y, z)
             }
         });
     }
@@ -304,7 +313,6 @@ class Checkpoint5FinalGame {
     }
 
     initHotbarUI() {
-        this.selectedBlockType = BLOCK_TYPES.GRASS;
         const hotbarContainer = document.createElement('div');
         hotbarContainer.style.position = 'fixed';
         hotbarContainer.style.bottom = '15px';
@@ -342,7 +350,11 @@ class Checkpoint5FinalGame {
 
             slot.addEventListener('pointerdown', (e) => {
                 e.preventDefault(); e.stopPropagation();
-                this.selectSlot(index, item.type, item.color);
+                if (window.setBlockType) {
+                    const typeNames = ['GRASS', 'DIRT', 'STONE', 'WOOD', 'LEAVES'];
+                    window.setBlockType(typeNames[index]);
+                }
+                this.selectSlot(index, item.color);
             });
 
             hotbarContainer.appendChild(slot);
@@ -351,8 +363,7 @@ class Checkpoint5FinalGame {
         document.body.appendChild(hotbarContainer);
     }
 
-    selectSlot(index, type, color) {
-        this.selectedBlockType = type;
+    selectSlot(index, color) {
         this.hotbarSlots.forEach((slot, i) => {
             if (i === index) {
                 slot.style.border = '3px solid #ffff00'; slot.style.background = color;
@@ -490,15 +501,4 @@ class Checkpoint5FinalGame {
     }
 
     animate() {
-        requestAnimationFrame(() => this.animate());
-        this.update();
-        if (this.renderer && this.scene && this.camera) {
-            this.renderer.render(this.scene, this.camera);
-        }
-    }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5FinalGame();
-});
-            
+        requestAn
