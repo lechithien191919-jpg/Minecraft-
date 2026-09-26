@@ -1,100 +1,81 @@
-// js/itemDrop.js
-import * as THREE from 'three';
-import { EventBus } from './eventBus.js';
-import { BLOCK_TYPES } from './blocks.js';
-
-export function createItemDrop({ scene, world }) {
+// itemDrop.js
+export function createItemDrop(options) {
+    const scene = options.scene;
+    const world = options.world;
     const items = [];
-    const MAX_ITEMS = 30;
-    const DESPAWN_MS = 90000;
-    const PICKUP_RADIUS = 1.5;
-    const ITEM_SIZE = 0.3;
-    const GRAVITY_ITEM = 15.0;
-    const STOP_Y = -10;
 
-    // Share geometry — tạo 1 lần
-    const sharedGeo = new THREE.BoxGeometry(ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
+    function spawnItem(position, blockType) {
+        const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+        
+        let color = 0x8b5a2b; 
+        if (blockType === 3) color = 0x5c4033; // Gỗ
+        else if (blockType === 4) color = 0x2e8b57; // Lá
+        else if (blockType === 1) color = 0x559933; // Cỏ
+        else if (blockType === 2) color = 0x7f7f7f; // Đá
 
-    function spawnItem(x, y, z, type) {
-        // Chỉ spawn cho WOOD và LEAVES
-        if (type !== BLOCK_TYPES.WOOD && type !== BLOCK_TYPES.LEAVES) return;
+        const material = new THREE.MeshStandardMaterial({ color: color });
+        const mesh = new THREE.Mesh(geometry, material);
 
-        // Max items — xóa cái cũ nhất
-        if (items.length >= MAX_ITEMS) {
-            const oldest = items.shift();
-            scene.remove(oldest.mesh);
-            console.log(`[CASE ITEM] despawn: type=${oldest.type} | reason=max_items | total=${items.length}`);
-        }
+        mesh.position.set(
+            position.x + (Math.random() - 0.5) * 0.5,
+            position.y + 0.5,
+            position.z + (Math.random() - 0.5) * 0.5
+        );
 
-        // Material — SHARE reference trực tiếp từ BLOCK_TYPES, không clone
-        const material = BLOCK_TYPES[type]?.material || BLOCK_TYPES.WOOD.material;
-
-        const mesh = new THREE.Mesh(sharedGeo, material);
-        mesh.position.set(x, y + 0.5, z);
         scene.add(mesh);
 
         items.push({
-            mesh,
-            type,
-            velocityY: 0,
-            spawnTime: performance.now()
+            mesh: mesh,
+            type: blockType,
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 3,
+                4 + Math.random() * 2,
+                (Math.random() - 0.5) * 3
+            ),
+            age: 0,
+            maxAge: 90
         });
-
-        console.log(`[CASE ITEM] spawn: type=${type} | pos=(${x}, ${y}, ${z}) | total=${items.length}`);
     }
 
-    function update(dt, playerPos) {
-        const now = performance.now();
-
+    function update(dt, playerPosition) {
         for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
+            item.age += dt;
 
-            // 1. Despawn timer
-            if (now - item.spawnTime > DESPAWN_MS) {
+            if (item.age > item.maxAge || items.length > 30) {
                 scene.remove(item.mesh);
+                item.mesh.geometry.dispose();
+                item.mesh.material.dispose();
                 items.splice(i, 1);
-                console.log(`[CASE ITEM] despawn: type=${item.type} | reason=timeout | total=${items.length}`);
                 continue;
             }
 
-            // 2. Rơi nhẹ
-            item.velocityY -= GRAVITY_ITEM * dt;
-            item.mesh.position.y += item.velocityY * dt;
+            item.velocity.y -= 15 * dt;
+            item.mesh.position.addScaledVector(item.velocity, dt);
 
-            // 3. Dừng khi chạm mặt đất hoặc STOP_Y
-            if (item.mesh.position.y <= STOP_Y) {
-                item.mesh.position.y = STOP_Y;
-                item.velocityY = 0;
-            } else {
-                const checkPos = { x: item.mesh.position.x, y: item.mesh.position.y - ITEM_SIZE, z: item.mesh.position.z };
-                if (world.has(Math.floor(checkPos.x), Math.floor(checkPos.y), Math.floor(checkPos.z))) {
-                    item.mesh.position.y = Math.floor(checkPos.y) + 0.5 + ITEM_SIZE / 2;
-                    item.velocityY = 0;
-                }
+            if (item.mesh.position.y < -0.5) {
+                item.mesh.position.y = -0.5;
+                item.velocity.y = -item.velocity.y * 0.3;
+                item.velocity.x *= 0.8;
+                item.velocity.z *= 0.8;
             }
 
-            // 4. Xoay nhẹ cho đẹp
-            item.mesh.rotation.y += dt * 1.5;
+            item.mesh.rotation.x += 1.5 * dt;
+            item.mesh.rotation.y += 2.0 * dt;
 
-            // 5. Pickup check
-            if (playerPos) {
-                const dx = playerPos.x - item.mesh.position.x;
-                const dy = playerPos.y - item.mesh.position.y;
-                const dz = playerPos.z - item.mesh.position.z;
-                if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-                    scene.remove(item.mesh);
-                    items.splice(i, 1);
-                    console.log(`[CASE ITEM] pickup: type=${item.type} | pos=(${item.mesh.position.x.toFixed(1)}, ${item.mesh.position.y.toFixed(1)}, ${item.mesh.position.z.toFixed(1)}) | total=${items.length}`);
-                    EventBus.emit('item:picked', { type: item.type });
-                }
+            const distance = item.mesh.position.distanceTo(playerPosition);
+            if (distance < 1.5) {
+                console.log(`[ITEM DROP] Đã nhặt item loại: ${item.type}`);
+                scene.remove(item.mesh);
+                item.mesh.geometry.dispose();
+                item.mesh.material.dispose();
+                items.splice(i, 1);
             }
         }
     }
 
-    // Nghe event block broken
-    EventBus.on('block:broken', (data) => {
-        spawnItem(data.x, data.y, data.z, data.type);
-    });
-
-    return { spawnItem, update };
+    return {
+        spawnItem,
+        update
+    };
 }
