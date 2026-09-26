@@ -156,12 +156,14 @@ class Checkpoint5Step1Game {
         // --- Hàm bọc lấy mảng mesh theo đúng tiêu chuẩn Hội đồng ---
         this.getBlockMeshes = () => this.blockMeshes;
 
-        // Khởi tạo world mẫu
-        for (let x = -4; x <= 4; x += 1) {
-            for (let z = -8; z <= -2; z += 1) {
+        // --- MỞ RỘNG MẶT ĐẤT THẬT RỘNG RÃI ---
+        for (let x = -15; x <= 15; x += 1) {
+            for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, 'grass');
             }
         }
+        
+        // Vài khối block mẫu ở giữa sân để test
         this.addBlock(-2, 0, -5, 'grass');
         this.addBlock(0, 0, -5, 'dirt');
         this.addBlock(2, 0, -5, 'stone');
@@ -315,8 +317,8 @@ class Checkpoint5Step1Game {
         const actions = [
             { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => this.blockInteraction.placeBlock(this.selectedBlockType) }, // Kích hoạt ĐẶT thật
-            { text: 'ĐẬP', cb: () => this.blockInteraction.breakBlock() }                   // Kích hoạt ĐẬP thật
+            { text: 'ĐẶT', cb: () => this.blockInteraction.placeBlock(this.selectedBlockType) },
+            { text: 'ĐẬP', cb: () => this.blockInteraction.breakBlock() }
         ];
 
         actions.forEach(item => {
