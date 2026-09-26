@@ -1,6 +1,5 @@
 export function createBlockHitbox({ world, playerRadius = 0.3, playerHeight = 1.7 }) {
     
-    // Kiểm tra va chạm AABB tổng quát giữa player và thế giới block
     function checkCollision(pos) {
         const pMinX = pos.x - playerRadius;
         const pMaxX = pos.x + playerRadius;
@@ -36,31 +35,24 @@ export function createBlockHitbox({ world, playerRadius = 0.3, playerHeight = 1.
         return false;
     }
 
-    // Thuật toán Leo block thông minh theo Phương án B:
-    // - Cao 1 block (<= 1.0): Cho phép step-up trèo lên.
-    // - Cao từ 2 block trở lên: Chặn đứng hoàn toàn.
-    // - Đứng trên 1 block mà bên cạnh là 2 block: Vẫn cho phép lướt qua nếu khoảng trống hợp lệ.
+    // Quy tắc leo block: Chỉ cho phép leo bậc cao 1 block, từ 2 block trở lên sẽ chặn đứng
     function tryStepUp(currentPos, axis, step, isGrounded) {
         if (!isGrounded) return null;
         
-        // Thử nhấc vị trí lên 1 block (chiều cao bước nhảy tối đa cho phép là 1 tầng)
         const tryPos = currentPos.clone();
-        tryPos.y += 1.0;
+        tryPos.y += 1.0; // Thử nhấc lên 1 tầng
         tryPos[axis] += step;
         
-        // Nếu vị trí nhấc lên không vướng đầu/trần
         if (!checkCollision(tryPos)) {
-            // Kiểm tra xem phía dưới chân ở vị trí mới có block đỡ hay không
             const belowPos = tryPos.clone();
             belowPos.y -= 1.1;
             if (checkCollision(belowPos)) {
-                return tryPos; // Thỏa mãn leo lên block 1 tầng thành công!
+                return tryPos; // Hợp lệ: leo lên được block cao 1 tầng
             }
         }
-        return null; // Quá cao (>= 2 block) hoặc không có chỗ đứng -> Chặn lại
+        return null; // Không hợp lệ hoặc quá cao (>= 2 tầng): chặn lại
     }
 
-    // Kiểm tra xem vị trí đặt block có đè lên người chơi không
     function isPlayerIntersectingBlock(playerPos, bx, by, bz) {
         const pMinX = playerPos.x - playerRadius;
         const pMaxX = playerPos.x + playerRadius;
@@ -86,3 +78,4 @@ export function createBlockHitbox({ world, playerRadius = 0.3, playerHeight = 1.
         isPlayerIntersectingBlock
     };
 }
+
