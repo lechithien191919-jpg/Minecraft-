@@ -1,4 +1,4 @@
-class Checkpoint5Layer0EventTestGame {
+class Checkpoint5Step1ArchitectureGame {
     constructor() {
         try {
             this.initThree();
@@ -7,7 +7,7 @@ class Checkpoint5Layer0EventTestGame {
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 LỚP 0 (EVENT TEST) — Đã khởi chạy thành công!");
+            console.log("🟢 STEP 1: No-Dispose Zone & Mobile Event Firewall đã sẵn sàng!");
         } catch (error) {
             this.showError(error);
         }
@@ -48,6 +48,7 @@ class Checkpoint5Layer0EventTestGame {
         });
     }
 
+    // --- NO-DISPOSE ZONE: Khởi tạo Shared Resources ---
     createBlockMaterials() {
         const createPixelTexture = (drawCallback) => {
             const canvas = document.createElement('canvas');
@@ -167,10 +168,13 @@ class Checkpoint5Layer0EventTestGame {
         hotbarContainer.style.padding = '10px 15px';
         hotbarContainer.style.borderRadius = '12px';
         hotbarContainer.style.zIndex = '9999';
-        hotbarContainer.style.pointerEvents = 'auto';
+        hotbarContainer.style.touchAction = 'none';
 
-        hotbarContainer.addEventListener('pointerdown', (e) => e.stopPropagation());
-        hotbarContainer.addEventListener('pointermove', (e) => e.stopPropagation());
+        // --- MOBILE EVENT FIREWALL CHO HOTBAR ---
+        hotbarContainer.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
 
         const items = [
             { type: 'grass', label: 'GRASS' },
@@ -196,8 +200,10 @@ class Checkpoint5Layer0EventTestGame {
             slot.style.fontWeight = 'bold';
             slot.style.cursor = 'pointer';
             slot.style.userSelect = 'none';
+            slot.style.touchAction = 'none';
 
-            slot.addEventListener('click', (e) => {
+            slot.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 this.selectSlot(index, item.type);
             });
@@ -245,6 +251,7 @@ class Checkpoint5Layer0EventTestGame {
         ui.style.height = '100%';
         ui.style.zIndex = '999';
         ui.style.pointerEvents = 'none';
+        ui.style.touchAction = 'none';
         document.body.appendChild(ui);
 
         const btnBox = document.createElement('div');
@@ -255,32 +262,18 @@ class Checkpoint5Layer0EventTestGame {
         btnBox.style.gridTemplateColumns = 'repeat(2, 60px)';
         btnBox.style.gap = '8px';
         btnBox.style.pointerEvents = 'auto';
+        btnBox.style.touchAction = 'none';
 
-        // --- 🎯 LỚP 0: EVENT TEST CHÍNH XÁC CHO NÚT ĐẬP & ĐẶT ---
+        // --- MOBILE EVENT FIREWALL CHO CÁC NÚT HÀNH ĐỘNG ---
         const actions = [
-            { id: 'btn-switch', text: 'ĐỔI', cb: (e) => { console.log(`SWITCH fired — Target ID: ${e.target.id || 'none'}`); } },
-            { id: 'btn-jump', text: 'NHẢY', cb: (e) => { this.jump(); console.log(`JUMP fired — Target ID: ${e.target.id || 'none'}`); } },
-            { 
-                id: 'btn-place', 
-                text: 'ĐẶT', 
-                cb: (e) => { 
-                    console.log(`PLACE fired: YES`);
-                    console.log(`Target ID: ${e.target.id || 'btn-place'}`); 
-                } 
-            },
-            { 
-                id: 'btn-break', 
-                text: 'ĐẬP', 
-                cb: (e) => { 
-                    console.log(`BREAK fired: YES`);
-                    console.log(`Target ID: ${e.target.id || 'btn-break'}`); 
-                } 
-            }
+            { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
+            { text: 'NHẢY', cb: () => this.jump() },
+            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (chờ Step 5)"); } },
+            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (chờ Step 3)"); } }
         ];
 
         actions.forEach(item => {
             const b = document.createElement('button');
-            b.id = item.id;
             b.innerText = item.text;
             b.style.width = '60px';
             b.style.height = '60px';
@@ -290,12 +283,12 @@ class Checkpoint5Layer0EventTestGame {
             b.style.border = '2px solid #fff';
             b.style.fontWeight = 'bold';
             b.style.pointerEvents = 'auto';
+            b.style.touchAction = 'none'; // Chống Safari delay
 
-            // Dùng pointerdown để test event chuẩn xác, chặn bọt sự kiện hoàn toàn không lọt ra camera
             b.addEventListener('pointerdown', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                item.cb(e);
+                e.preventDefault();      // 1. Chặn hành vi mặc định
+                e.stopPropagation();     // 2. Chặn bọt sự kiện lên window
+                item.cb();               // 3. Thực thi handler
             });
 
             btnBox.appendChild(b);
@@ -337,22 +330,20 @@ class Checkpoint5Layer0EventTestGame {
 
         joyOuter.addEventListener('pointerdown', (e) => {
             if (!joyActive) {
+                e.preventDefault();
+                e.stopPropagation();
                 joyActive = true;
                 joyPointerId = e.pointerId;
                 const r = joyOuter.getBoundingClientRect();
                 center.x = r.left + r.width / 2;
                 center.y = r.top + r.height / 2;
-                e.stopPropagation();
             }
         });
 
         let activeLookPointers = new Map();
 
+        // Camera drag chỉ lắng nghe trên Canvas/Window ngoài cùng, bị chặn tuyệt đối bởi UI event firewall
         window.addEventListener('pointerdown', (e) => {
-            if (e.clientX < 180 && e.clientY > window.innerHeight - 220) return;
-            if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 220) return;
-            if (e.clientY > window.innerHeight - 70) return;
-
             if (e.pointerId !== joyPointerId) {
                 activeLookPointers.set(e.pointerId, { lastX: e.clientX, lastY: e.clientY });
             }
@@ -407,6 +398,7 @@ class Checkpoint5Layer0EventTestGame {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
+            console.log("🦘 Jump triggered!");
         }
     }
 
@@ -463,6 +455,6 @@ class Checkpoint5Layer0EventTestGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Layer0EventTestGame();
+    new Checkpoint5Step1ArchitectureGame();
 });
-
+            
