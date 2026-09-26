@@ -1,83 +1,108 @@
-export function createBlockHitbox({ world, playerRadius = 0.3, playerHeight = 1.7 }) {
-    
-    function checkCollision(pos) {
-        const pMinX = pos.x - playerRadius;
-        const pMaxX = pos.x + playerRadius;
-        const pMinY = pos.y - playerHeight;
-        const pMaxY = pos.y;
-        const pMinZ = pos.z - playerRadius;
-        const pMaxZ = pos.z + playerRadius;
-        
-        const startX = Math.floor(pMinX);
-        const endX   = Math.floor(pMaxX);
-        const startY = Math.floor(pMinY);
-        const endY   = Math.floor(pMaxY);
-        const startZ = Math.floor(pMinZ);
-        const endZ   = Math.floor(pMaxZ);
-        
-        for (let bx = startX; bx <= endX; bx++) {
-            for (let by = startY; by <= endY; by++) {
-                for (let bz = startZ; bz <= endZ; bz++) {
-                    if (!world.has(bx, by, bz)) continue;
-                    
-                    const bMinX = bx - 0.5, bMaxX = bx + 0.5;
-                    const bMinY = by - 0.5, bMaxY = by + 0.5;
-                    const bMinZ = bz - 0.5, bMaxZ = bz + 0.5;
-                    
-                    if (pMaxX > bMinX && pMinX < bMaxX &&
-                        pMaxY > bMinY && pMinY < bMaxY &&
-                        pMaxZ > bMinZ && pMinZ < bMaxZ) {
-                        return true;
-                    }
+export function createBlockInteraction({ scene, camera, world, getBlockMeshes, raycaster, isPlayerIntersecting }) {
+
+    function breakBlock() {
+        try {
+            const screenCenter = new THREE.Vector2(0, 0);
+            raycaster.setFromCamera(screenCenter, camera);
+            
+            const meshes = getBlockMeshes();
+            const intersects = raycaster.intersectObjects(meshes, false);
+            
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const targetMesh = hit.object;
+                const ud = targetMesh.userData;
+                
+                let bx, by, bz;
+                if (ud && typeof ud.x === 'number' && typeof ud.y === 'number' && typeof ud.z === 'number') {
+                    bx = ud.x;
+                    by = ud.y;
+                    bz = ud.z;
+                } else {
+                    bx = Math.round(targetMesh.position.x);
+                    by = Math.round(targetMesh.position.y);
+                    bz = Math.round(targetMesh.position.z);
+                }
+                
+                const success = world.removeBlock(bx, by, bz);
+                if (success) {
+                    console.log(`🗑️ Đã đập block tại (${bx}, ${by}, ${bz})`);
+                    return true;
                 }
             }
+            return false;
+        } catch (e) {
+            console.error('[breakBlock] error:', e);
+            return false;
         }
-        return false;
     }
 
-    // Quy tắc leo block: Chỉ cho phép leo bậc cao 1 block, từ 2 block trở lên sẽ chặn đứng
-    function tryStepUp(currentPos, axis, step, isGrounded) {
-        if (!isGrounded) return null;
-        
-        const tryPos = currentPos.clone();
-        tryPos.y += 1.0; 
-        tryPos[axis] += step;
-        
-        if (!checkCollision(tryPos)) {
-            const belowPos = tryPos.clone();
-            belowPos.y -= 1.1;
-            if (checkCollision(belowPos)) {
-                return tryPos; 
+    function placeBlock(selectedType) {
+        try {
+            const screenCenter = new THREE.Vector2(0, 0);
+            raycaster.setFromCamera(screenCenter, camera);
+            
+            const meshes = getBlockMeshes();
+            const intersects = raycaster.intersectObjects(meshes, false);
+            
+            if (!intersects || intersects.length === 0) return false;
+            
+            const hit = intersects[0];
+            if (!hit || !hit.object || !hit.object.userData) return false;
+            if (!hit.face) return false;
+            
+            const targetMesh = hit.object;
+            const ud = targetMesh.userData;
+            
+            // Transform normal sang world space (an toàn cho tương lai khi có block xoay)
+            const worldNormal = hit.face.normal.clone()
+                .applyQuaternion(targetMesh.quaternion);
+            
+            // Chỉ chấp nhận normal axis-aligned chuẩn xác
+            const nx = Math.abs(worldNormal.x) > 0.5 ? Math.sign(worldNormal.x) : 0;
+            const ny = Math.abs(worldNormal.y) > 0.5 ? Math.sign(worldNormal.y) : 0;
+            const nz = Math.abs(worldNormal.z) > 0.5 ? Math.sign(worldNormal.z) : 0;
+            
+            // Ưu tiên lấy từ userData — fallback an toàn nếu thiếu
+            let bx, by, bz;
+            if (typeof ud.x === 'number' && typeof ud.y === 'number' && typeof ud.z === 'number') {
+                bx = ud.x + nx;
+                by = ud.y + ny;
+                bz = ud.z + nz;
+            } else {
+                const pos = targetMesh.position.clone().add(worldNormal);
+                bx = Math.round(pos.x);
+                by = Math.round(pos.y);
+                bz = Math.round(pos.z);
             }
+            
+            // Check nhanh: Ô đích đã có block chưa (Fail fast)
+            if (world.has(bx, by, bz)) {
+                console.warn(`⚠️ Ô (${bx}, ${by}, ${bz}) đã có block!`);
+                return false;
+            }
+            
+            // Check player AABB xem có bị đè người không
+            if (typeof isPlayerIntersecting === 'function' 
+                && isPlayerIntersecting(bx, by, bz)) {
+                console.warn(`⚠️ Block đè lên player tại (${bx}, ${by}, ${bz})!`);
+                return false;
+            }
+            
+            const newMesh = world.addBlock(bx, by, bz, selectedType);
+            if (newMesh) {
+                console.log(`✅ Đặt ${selectedType} thành công tại (${bx}, ${by}, ${bz})`);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.error('[placeBlock] error:', e);
+            return false;
         }
-        return null; 
-    }
-
-    // Sửa lỗi chặn đặt block: Giảm nhẹ biên AABB của player khi check đặt block để không bị cản tay cản chân oan
-    function isPlayerIntersectingBlock(playerPos, bx, by, bz) {
-        const tolerance = 0.15; // Tạo khoảng đệm nhỏ để đặt block mượt mà hơn
-        const pMinX = playerPos.x - playerRadius + tolerance;
-        const pMaxX = playerPos.x + playerRadius - tolerance;
-        const pMinY = playerPos.y - playerHeight;
-        const pMaxY = playerPos.y;
-        const pMinZ = playerPos.z - playerRadius + tolerance;
-        const pMaxZ = playerPos.z + playerRadius - tolerance;
-
-        const bMinX = bx - 0.5, bMaxX = bx + 0.5;
-        const bMinY = by - 0.5, bMaxY = by + 0.5;
-        const bMinZ = bz - 0.5, bMaxZ = bz + 0.5;
-
-        return (pMaxX > bMinX && pMinX < bMaxX &&
-                pMaxY > bMinY && pMinY < bMaxY &&
-                pMaxZ > bMinZ && pMinZ < bMaxZ);
     }
 
     return {
-        playerHeight,
-        playerRadius,
-        checkCollision,
-        tryStepUp,
-        isPlayerIntersectingBlock
+        breakBlock,
+        placeBlock
     };
 }
-
