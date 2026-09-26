@@ -1,5 +1,5 @@
 /**
- * blocks.js — Định nghĩa các loại block và tạo texture pixel trực tiếp
+ * blocks.js — Tối ưu hóa texture pixel nhẹ mượt cho mobile
  */
 
 export const BLOCK_TYPES = {
@@ -10,7 +10,11 @@ export const BLOCK_TYPES = {
     LEAVES: 'leaves'
 };
 
+let cachedMaterials = null;
+
 export function createBlockMaterials() {
+    if (cachedMaterials) return cachedMaterials;
+
     const createPixelTexture = (drawCallback) => {
         const canvas = document.createElement('canvas');
         canvas.width = 16;
@@ -23,20 +27,18 @@ export function createBlockMaterials() {
         return texture;
     };
 
-    // 1. Texture Đất (Dirt)
     const dirtTex = createPixelTexture(ctx => {
         ctx.fillStyle = '#8B5A2B';
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#6F441F';
-        for(let i = 0; i < 20; i++) ctx.fillRect(Math.random() * 16, Math.random() * 16, 1, 1);
+        for(let i = 0; i < 15; i++) ctx.fillRect((i * 3) % 16, (i * 7) % 16, 1, 1);
     });
 
-    // 2. Texture Cỏ (Grass Top & Side)
     const grassTopTex = createPixelTexture(ctx => {
         ctx.fillStyle = '#559933';
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#448822';
-        for(let i = 0; i < 15; i++) ctx.fillRect(Math.random() * 16, Math.random() * 16, 1, 1);
+        for(let i = 0; i < 12; i++) ctx.fillRect((i * 4) % 16, (i * 5) % 16, 1, 1);
     });
 
     const grassSideTex = createPixelTexture(ctx => {
@@ -44,45 +46,39 @@ export function createBlockMaterials() {
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#559933';
         ctx.fillRect(0, 0, 16, 5);
-        ctx.fillRect(2, 5, 1, 2);
-        ctx.fillRect(5, 5, 2, 3);
-        ctx.fillRect(10, 5, 1, 2);
-        ctx.fillRect(13, 5, 2, 1);
     });
 
-    // 3. Texture Đá (Stone)
     const stoneTex = createPixelTexture(ctx => {
         ctx.fillStyle = '#808080';
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#606060';
-        for(let i = 0; i < 25; i++) ctx.fillRect(Math.random() * 16, Math.random() * 16, 1, 1);
+        for(let i = 0; i < 15; i++) ctx.fillRect((i * 5) % 16, (i * 3) % 16, 1, 1);
     });
 
-    // 4. Texture Gỗ (Wood) — Thân cây có vân sọc
     const woodTex = createPixelTexture(ctx => {
         ctx.fillStyle = '#5c4033';
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#3d2817';
-        for(let i = 0; i < 5; i++) {
-            ctx.fillRect(i * 3 + 1, 0, 1, 16);
-        }
+        ctx.fillRect(3, 0, 2, 16);
+        ctx.fillRect(10, 0, 2, 16);
     });
 
-    // 5. Texture Lá (Leaves) — Xanh đậm có đốm lá
     const leavesTex = createPixelTexture(ctx => {
         ctx.fillStyle = '#2e8b57';
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = '#1e5f3b';
-        for(let i = 0; i < 35; i++) ctx.fillRect(Math.random() * 16, Math.random() * 16, 1, 1);
+        for(let i = 0; i < 20; i++) ctx.fillRect((i * 3) % 16, (i * 4) % 16, 2, 2);
     });
 
-    return {
-        dirt: new THREE.MeshLambertMaterial({ map: dirtTex }),
-        stone: new THREE.MeshLambertMaterial({ map: stoneTex }),
-        wood: new THREE.MeshLambertMaterial({ map: woodTex }),
-        leaves: new THREE.MeshLambertMaterial({ map: leavesTex }),
+    cachedMaterials = {
+        dirt: new THREE.MeshBasicMaterial({ map: dirtTex }),
+        stone: new THREE.MeshBasicMaterial({ map: stoneTex }),
+        wood: new THREE.MeshBasicMaterial({ map: woodTex }),
+        leaves: new THREE.MeshBasicMaterial({ map: leavesTex }),
         grass: [
             grassSideTex, grassSideTex, grassTopTex, dirtTex, grassSideTex, grassSideTex
-        ].map(tex => new THREE.MeshLambertMaterial({ map: tex }))
+        ].map(tex => new THREE.MeshBasicMaterial({ map: tex }))
     };
+
+    return cachedMaterials;
 }
