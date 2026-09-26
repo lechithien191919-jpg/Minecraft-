@@ -1,14 +1,16 @@
-class Checkpoint5StepCWorldManagerGame {
+import { createBlockInteraction } from './blockInteraction.js';
+
+class Checkpoint5Step1Game {
     constructor() {
         try {
             this.initThree();
-            this.initWorldManager(); // Khởi tạo hệ thống quản lý block theo tọa độ (Step A & B)
+            this.initWorldManager();
+            this.initRaycasterAndInteraction(); // Khởi tạo module tương tác block
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
-            this.initRaycaster();    // Khởi tạo Raycast Target tối ưu (Step C)
             this.animate();
-            console.log("🟢 STEP A, B, C: World Manager & Raycast Target đã sẵn sàng!");
+            console.log("🟢 STEP 1: Module blockInteraction đã được tích hợp thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -104,26 +106,21 @@ class Checkpoint5StepCWorldManagerGame {
         };
     }
 
-    // --- STEP A & B: WORLD BLOCK MANAGER API ---
     initWorldManager() {
         this.materials = this.createBlockMaterials();
-        this.blockMeshes = []; // Danh sách mesh chuyên dụng cho Raycast
-        this.worldBlocks = new Map(); // Lưu trữ theo khóa tọa độ "x,y,z"
+        this.blockMeshes = []; 
+        this.worldBlocks = new Map(); 
 
-        // Hàm helper khóa tọa độ
         this.getKey = (x, y, z) => `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 
-        // API: hasBlock
         this.hasBlock = (x, y, z) => {
             return this.worldBlocks.has(this.getKey(x, y, z));
         };
 
-        // API: getBlock
         this.getBlock = (x, y, z) => {
             return this.worldBlocks.get(this.getKey(x, y, z)) || null;
         };
 
-        // API: addBlock
         this.addBlock = (x, y, z, type) => {
             const key = this.getKey(x, y, z);
             if (this.worldBlocks.has(key)) return null;
@@ -132,8 +129,6 @@ class Checkpoint5StepCWorldManagerGame {
             const mat = this.materials[type] || this.materials.grass;
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y, z);
-
-            // Gắn userData chuẩn theo Step A
             mesh.userData = { type, x, y, z };
 
             this.scene.add(mesh);
@@ -142,7 +137,6 @@ class Checkpoint5StepCWorldManagerGame {
             return mesh;
         };
 
-        // API: removeBlock
         this.removeBlock = (x, y, z) => {
             const key = this.getKey(x, y, z);
             const blockData = this.worldBlocks.get(key);
@@ -150,7 +144,6 @@ class Checkpoint5StepCWorldManagerGame {
 
             this.scene.remove(blockData.mesh);
             
-            // Xóa khỏi mảng blockMeshes
             const index = this.blockMeshes.indexOf(blockData.mesh);
             if (index !== -1) {
                 this.blockMeshes.splice(index, 1);
@@ -160,46 +153,37 @@ class Checkpoint5StepCWorldManagerGame {
             return true;
         };
 
-        // --- Khởi tạo dữ liệu mẫu ban đầu cho World ---
-        // 1. Tạo mặt đất (Ground phẳng rộng ở y = -1)
+        // --- Hàm bọc lấy mảng mesh theo đúng tiêu chuẩn Hội đồng ---
+        this.getBlockMeshes = () => this.blockMeshes;
+
+        // Khởi tạo world mẫu
         for (let x = -4; x <= 4; x += 1) {
             for (let z = -8; z <= -2; z += 1) {
                 this.addBlock(x, -1, z, 'grass');
             }
         }
-
-        // 2. Tạo các khối block mẫu (Grass, Dirt, Stone) lơ lửng ngay trước mặt player để test raycast
         this.addBlock(-2, 0, -5, 'grass');
         this.addBlock(0, 0, -5, 'dirt');
         this.addBlock(2, 0, -5, 'stone');
     }
 
-    // --- STEP C: RAYCASTER & GET TARGET BLOCK API ---
-    initRaycaster() {
+    initRaycasterAndInteraction() {
         this.raycaster = new THREE.Raycaster();
-        this.screenCenter = new THREE.Vector2(0, 0); // Tâm màn hình NDC (0,0)
-    }
 
-    getTargetBlock() {
-        this.raycaster.setFromCamera(this.screenCenter, this.camera);
-        const intersects = this.raycaster.intersectObjects(this.blockMeshes, false);
-
-        if (!intersects || intersects.length === 0) {
-            return null;
-        }
-
-        const hit = intersects[0];
-        if (!hit || !hit.object || !hit.object.userData) {
-            return null;
-        }
-
-        return {
-            mesh: hit.object,
-            type: hit.object.userData.type || 'unknown',
-            position: new THREE.Vector3(hit.object.userData.x, hit.object.userData.y, hit.object.userData.z),
-            normal: hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0),
-            distance: hit.distance
-        };
+        // Khởi tạo module blockInteraction với Dependency Injection chuẩn mực
+        this.blockInteraction = createBlockInteraction({
+            scene: this.scene,
+            camera: this.camera,
+            world: {
+                has: this.hasBlock,
+                get: this.getBlock,
+                addBlock: this.addBlock,
+                removeBlock: this.removeBlock,
+                hasBlock: this.hasBlock
+            },
+            getBlockMeshes: this.getBlockMeshes,
+            raycaster: this.raycaster
+        });
     }
 
     initCrosshair() {
@@ -331,8 +315,8 @@ class Checkpoint5StepCWorldManagerGame {
         const actions = [
             { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (Chưa kích hoạt)"); } },
-            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (Chưa kích hoạt)"); } }
+            { text: 'ĐẶT', cb: () => this.blockInteraction.placeBlock(this.selectedBlockType) }, // Kích hoạt ĐẶT thật
+            { text: 'ĐẬP', cb: () => this.blockInteraction.breakBlock() }                   // Kích hoạt ĐẬP thật
         ];
 
         actions.forEach(item => {
@@ -464,8 +448,6 @@ class Checkpoint5StepCWorldManagerGame {
         }
     }
 
-    _lastLogTime = 0;
-
     update() {
         this.lon += (this.targetLon - this.lon) * 0.4;
         this.lat += (this.targetLat - this.lat) * 0.4;
@@ -502,18 +484,6 @@ class Checkpoint5StepCWorldManagerGame {
             this.camera.position.z + 10 * Math.sin(phi) * Math.cos(theta)
         );
         this.camera.lookAt(target);
-
-        // --- TEST RAYCAST TARGET VÀ LOG CHI TIẾT THEO YÊU CẦU ---
-        const targetBlock = this.getTargetBlock();
-        const now = performance.now();
-        if (now - this._lastLogTime > 400) {
-            this._lastLogTime = now;
-            if (targetBlock) {
-                console.log(`[TARGET] type: ${targetBlock.type} | pos:`, targetBlock.position, `| normal:`, targetBlock.normal, `| dist: ${targetBlock.distance.toFixed(2)}`);
-            } else {
-                console.log("[TARGET] none");
-            }
-        }
     }
 
     showError(err) {
@@ -531,6 +501,6 @@ class Checkpoint5StepCWorldManagerGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5StepCWorldManagerGame();
+    new Checkpoint5Step1Game();
 });
-            
+                
