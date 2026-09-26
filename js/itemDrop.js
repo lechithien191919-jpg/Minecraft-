@@ -1,6 +1,5 @@
 // itemDrop.js
 export function createItemDrop(options) {
-
     const scene = options.scene;
     const world = options.world;
     const items = [];
