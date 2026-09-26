@@ -1,11 +1,12 @@
-class Checkpoint3StableWithSmoothCamera {
+class CheckpointHotbarGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
+            this.initHotbarUI(); // Hạng mục A: Hotbar System
             this.initControls();
             this.animate();
-            console.log("🟢 Checkpoint 3 Stable + Smooth Touch Camera đã khởi chạy!");
+            console.log("🟢 Hotbar System đã được tích hợp thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -29,7 +30,6 @@ class Checkpoint3StableWithSmoothCamera {
         canvas.style.width = '100vw';
         canvas.style.height = '100vh';
         canvas.style.zIndex = '1';
-        // AN TOÀN: Chặn gesture mặc định của mobile để tránh bị khựng sự kiện
         canvas.style.touchAction = 'none';
         document.body.appendChild(canvas);
 
@@ -135,6 +135,69 @@ class Checkpoint3StableWithSmoothCamera {
         }
     }
 
+    // --- HẠNG MỤC 1: HOTBAR UI SYSTEM ---
+    initHotbarUI() {
+        this.selectedBlockType = 'grass'; // Mặc định chọn block cỏ
+
+        const hotbarContainer = document.createElement('div');
+        hotbarContainer.style.position = 'fixed';
+        hotbarContainer.style.bottom = '20px';
+        hotbarContainer.style.left = '50%';
+        hotbarContainer.style.transform = 'translateX(-50%)';
+        hotbarContainer.style.display = 'flex';
+        hotbarContainer.style.gap = '8px';
+        hotbarContainer.style.background = 'rgba(0, 0, 0, 0.4)';
+        hotbarContainer.style.padding = '8px';
+        hotbarContainer.style.borderRadius = '12px';
+        hotbarContainer.style.zIndex = '20';
+        hotbarContainer.style.pointerEvents = 'auto'; // Cho phép click/touch vào hotbar riêng biệt
+
+        // Ngăn chặn sự kiện chạm lọt ra ngoài làm xoay camera
+        hotbarContainer.addEventListener('pointerdown', (e) => e.stopPropagation());
+        hotbarContainer.addEventListener('pointermove', (e) => e.stopPropagation());
+
+        const items = [
+            { type: 'grass', name: '🌱', bg: '#559933' },
+            { type: 'dirt', name: '🟫', bg: '#8B5A2B' },
+            { type: 'stone', name: '🪨', bg: '#808080' }
+        ];
+
+        this.hotbarSlots = [];
+
+        items.forEach((item, index) => {
+            const slot = document.createElement('div');
+            slot.style.width = '50px';
+            slot.style.height = '50px';
+            slot.style.background = item.bg;
+            slot.style.border = index === 0 ? '3px solid #fff' : '2px solid rgba(255,255,255,0.4)';
+            slot.style.borderRadius = '8px';
+            slot.style.display = 'flex';
+            slot.style.alignItems = 'center';
+            slot.style.justifyContent = 'center';
+            slot.style.fontSize = '22px';
+            slot.style.cursor = 'pointer';
+            slot.style.userSelect = 'none';
+
+            slot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.selectSlot(index, item.type);
+            });
+
+            hotbarContainer.appendChild(slot);
+            this.hotbarSlots.push(slot);
+        });
+
+        document.body.appendChild(hotbarContainer);
+    }
+
+    selectSlot(index, type) {
+        this.selectedBlockType = type;
+        this.hotbarSlots.forEach((slot, i) => {
+            slot.style.border = i === index ? '3px solid #fff' : '2px solid rgba(255,255,255,0.4)';
+        });
+        console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
+    }
+
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -159,7 +222,7 @@ class Checkpoint3StableWithSmoothCamera {
         ui.style.pointerEvents = 'none';
         document.body.appendChild(ui);
 
-        // --- 1. NÚT BẤM PHẢI ---
+        // --- NÚT BẤM PHẢI (NHẢY, ĐẶT, ĐẬP) ---
         const btnBox = document.createElement('div');
         btnBox.style.position = 'absolute';
         btnBox.style.right = '20px';
@@ -172,8 +235,8 @@ class Checkpoint3StableWithSmoothCamera {
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => {} },
-            { text: 'ĐẬP', cb: () => {} }
+            { text: 'ĐẶT', cb: () => { console.log(`Đặt block loại: ${this.selectedBlockType}`); } },
+            { text: 'ĐẬP', cb: () => { console.log("Đập block"); } }
         ];
 
         actions.forEach(item => {
@@ -194,7 +257,7 @@ class Checkpoint3StableWithSmoothCamera {
         });
         ui.appendChild(btnBox);
 
-        // --- 2. JOYSTICK TRÁI ---
+        // --- JOYSTICK TRÁI ---
         const outerSize = 120;
         const innerSize = 50;
 
@@ -238,12 +301,11 @@ class Checkpoint3StableWithSmoothCamera {
             e.stopPropagation();
         });
 
-        // --- 3. XOAY MÀN HÌNH TỐI ƯU DELTA (KHÔNG KHỰNG, AN TOÀN TUYỆT ĐỐI) ---
+        // --- XOAY MÀN HÌNH ĐÃ PASS MƯỢT MÀ ---
         let lookPointerId = null;
         let lastX = 0, lastY = 0;
 
         window.addEventListener('pointerdown', (e) => {
-            // Không bắt sự kiện nếu bấm nhầm vào vùng UI Joystick hoặc nút bấm phải
             if (e.clientX < 180 && e.clientY > window.innerHeight - 180) return;
             if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 160) return;
 
@@ -273,12 +335,10 @@ class Checkpoint3StableWithSmoothCamera {
                 const deltaX = e.clientX - lastX;
                 const deltaY = e.clientY - lastY;
 
-                // Cập nhật target rotation mượt mà bằng delta
                 this.targetLon -= deltaX * 0.4;
                 this.targetLat += deltaY * 0.4;
                 this.targetLat = Math.max(-85, Math.min(85, this.targetLat));
 
-                // Cập nhật mốc lastX/lastY liên tục để không bị giật khựng
                 lastX = e.clientX;
                 lastY = e.clientY;
             }
@@ -308,7 +368,6 @@ class Checkpoint3StableWithSmoothCamera {
     }
 
     update() {
-        // Lerp mượt mà bám sát ngón tay
         this.lon += (this.targetLon - this.lon) * 0.4;
         this.lat += (this.targetLat - this.lat) * 0.4;
 
@@ -361,6 +420,6 @@ class Checkpoint3StableWithSmoothCamera {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint3StableWithSmoothCamera();
+    new CheckpointHotbarGame();
 });
-                        
+            
