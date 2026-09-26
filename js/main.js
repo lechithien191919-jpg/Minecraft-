@@ -8,7 +8,7 @@ import { EventBus } from './eventBus.js';
 class Checkpoint5FinalGame {
     constructor() {
         try {
-            window.gameInstance = this; // Gắn global instance để các module dễ gọi
+            window.gameInstance = this;
             this.initThree();
             this.initWorldManager();
             this.initBlockHitbox();
@@ -501,4 +501,5 @@ class Checkpoint5FinalGame {
     }
 
     animate() {
-        requestAn
+        requestAnimationFrame(() => this.animate());
+        
