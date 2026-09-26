@@ -1,14 +1,14 @@
-class Checkpoint5Step2RaycastTargetGame {
+class Checkpoint5StepCWorldManagerGame {
     constructor() {
         try {
             this.initThree();
-            this.initWorld();
+            this.initWorldManager(); // Khởi tạo hệ thống quản lý block theo tọa độ (Step A & B)
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
-            this.initRaycaster(); // Khởi tạo hệ thống Raycast Target cho Step 2
+            this.initRaycaster();    // Khởi tạo Raycast Target tối ưu (Step C)
             this.animate();
-            console.log("🟢 STEP 2: Block Target Raycaster đã sẵn sàng!");
+            console.log("🟢 STEP A, B, C: World Manager & Raycast Target đã sẵn sàng!");
         } catch (error) {
             this.showError(error);
         }
@@ -49,7 +49,7 @@ class Checkpoint5Step2RaycastTargetGame {
         });
     }
 
-    // --- NO-DISPOSE ZONE: Khởi tạo Shared Resources ---
+    // --- NO-DISPOSE ZONE: Shared Resources ---
     createBlockMaterials() {
         const createPixelTexture = (drawCallback) => {
             const canvas = document.createElement('canvas');
@@ -104,90 +104,99 @@ class Checkpoint5Step2RaycastTargetGame {
         };
     }
 
-    initWorld() {
-        const materials = this.createBlockMaterials();
+    // --- STEP A & B: WORLD BLOCK MANAGER API ---
+    initWorldManager() {
+        this.materials = this.createBlockMaterials();
+        this.blockMeshes = []; // Danh sách mesh chuyên dụng cho Raycast
+        this.worldBlocks = new Map(); // Lưu trữ theo khóa tọa độ "x,y,z"
 
-        // Danh sách block riêng biệt phục vụ Raycast thuần túy theo yêu cầu STEP 2
-        this.blockMeshes = [];
-        this.worldBlocks = [];
+        // Hàm helper khóa tọa độ
+        this.getKey = (x, y, z) => `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 
-        // Tạo mặt đất (cũng đưa vào blockMeshes để test raycast mặt đất nếu muốn, hoặc quản lý block riêng)
-        const groundGeo = new THREE.BoxGeometry(40, 1, 40);
-        this.ground = new THREE.Mesh(groundGeo, materials.grass);
-        this.ground.position.set(0, -1, 0);
-        this.ground.userData = { type: 'grass', x: 0, y: -1, z: 0 };
-        this.scene.add(this.ground);
-        this.blockMeshes.push(this.ground);
+        // API: hasBlock
+        this.hasBlock = (x, y, z) => {
+            return this.worldBlocks.has(this.getKey(x, y, z));
+        };
 
-        const blockTypes = ['grass', 'dirt', 'stone'];
-        const blockMats = [materials.grass, materials.dirt, materials.stone];
+        // API: getBlock
+        this.getBlock = (x, y, z) => {
+            return this.worldBlocks.get(this.getKey(x, y, z)) || null;
+        };
 
-        let idCounter = 1;
-        for (let i = -3; i <= 3; i += 2) {
-            const typeIndex = (Math.abs(i) % 3);
-            const typeName = blockTypes[typeIndex];
-            const blockGeo = new THREE.BoxGeometry(1, 1, 1);
-            const block = new THREE.Mesh(blockGeo, blockMats[typeIndex]);
+        // API: addBlock
+        this.addBlock = (x, y, z, type) => {
+            const key = this.getKey(x, y, z);
+            if (this.worldBlocks.has(key)) return null;
+
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = this.materials[type] || this.materials.grass;
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+
+            // Gắn userData chuẩn theo Step A
+            mesh.userData = { type, x, y, z };
+
+            this.scene.add(mesh);
+            this.blockMeshes.push(mesh);
+            this.worldBlocks.set(key, { type, x, y, z, mesh });
+            return mesh;
+        };
+
+        // API: removeBlock
+        this.removeBlock = (x, y, z) => {
+            const key = this.getKey(x, y, z);
+            const blockData = this.worldBlocks.get(key);
+            if (!blockData) return false;
+
+            this.scene.remove(blockData.mesh);
             
-            const posX = i;
-            const posY = 0.5;
-            const posZ = -5;
+            // Xóa khỏi mảng blockMeshes
+            const index = this.blockMeshes.indexOf(blockData.mesh);
+            if (index !== -1) {
+                this.blockMeshes.splice(index, 1);
+            }
 
-            block.position.set(posX, posY, posZ);
-            
-            // GẮN DATA CHO BLOCK TRONG userData (Yêu cầu STEP 2)
-            block.userData = {
-                id: idCounter++,
-                type: typeName,
-                x: posX,
-                y: posY,
-                z: posZ
-            };
+            this.worldBlocks.delete(key);
+            return true;
+        };
 
-            this.scene.add(block);
-            this.blockMeshes.push(block); // Đưa vào mảng raycast riêng
-
-            this.worldBlocks.push({
-                id: block.userData.id,
-                type: typeName,
-                position: { x: posX, y: posY, z: posZ },
-                mesh: block
-            });
+        // --- Khởi tạo dữ liệu mẫu ban đầu cho World ---
+        // 1. Tạo mặt đất (Ground phẳng rộng ở y = -1)
+        for (let x = -4; x <= 4; x += 1) {
+            for (let z = -8; z <= -2; z += 1) {
+                this.addBlock(x, -1, z, 'grass');
+            }
         }
+
+        // 2. Tạo các khối block mẫu (Grass, Dirt, Stone) lơ lửng ngay trước mặt player để test raycast
+        this.addBlock(-2, 0, -5, 'grass');
+        this.addBlock(0, 0, -5, 'dirt');
+        this.addBlock(2, 0, -5, 'stone');
     }
 
-    // --- KHỞI TẠO RAYCASTER CHO STEP 2 ---
+    // --- STEP C: RAYCASTER & GET TARGET BLOCK API ---
     initRaycaster() {
         this.raycaster = new THREE.Raycaster();
-        this.screenCenter = new THREE.Vector2(0, 0); // Tâm màn hình chuẩn trong Normalized Device Coordinates
+        this.screenCenter = new THREE.Vector2(0, 0); // Tâm màn hình NDC (0,0)
     }
 
-    // --- HÀM TARGET BLOCK CHUẨN XÁC ---
     getTargetBlock() {
-        // 1. Raycast từ tâm camera
         this.raycaster.setFromCamera(this.screenCenter, this.camera);
-
-        // 2. Chỉ kiểm tra intersections trên mảng riêng blockMeshes (KHÔNG raycast toàn scene)
         const intersects = this.raycaster.intersectObjects(this.blockMeshes, false);
 
-        // 3. Nếu không trúng gì -> trả về null
-        if (intersects.length === 0) {
+        if (!intersects || intersects.length === 0) {
             return null;
         }
 
-        // 4. Lấy hit gần nhất
         const hit = intersects[0];
-
-        // 5. Kiểm tra hit.object và userData hợp lệ
         if (!hit || !hit.object || !hit.object.userData) {
             return null;
         }
 
-        // 6. Trả về dữ liệu chi tiết theo yêu cầu
         return {
             mesh: hit.object,
             type: hit.object.userData.type || 'unknown',
-            position: hit.object.position.clone(),
+            position: new THREE.Vector3(hit.object.userData.x, hit.object.userData.y, hit.object.userData.z),
             normal: hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0),
             distance: hit.distance
         };
@@ -322,8 +331,8 @@ class Checkpoint5Step2RaycastTargetGame {
         const actions = [
             { text: 'ĐỔI', cb: () => { console.log("SWITCH fired"); } },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (chờ Step sau)"); } },
-            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (chờ Step sau)"); } }
+            { text: 'ĐẶT', cb: () => { console.log("PLACE fired (Chưa kích hoạt)"); } },
+            { text: 'ĐẬP', cb: () => { console.log("BREAK fired (Chưa kích hoạt)"); } }
         ];
 
         actions.forEach(item => {
@@ -455,7 +464,6 @@ class Checkpoint5Step2RaycastTargetGame {
         }
     }
 
-    // Biến phụ trợ để throttle log raycast tránh ngập console quá mức trong animate loop
     _lastLogTime = 0;
 
     update() {
@@ -495,17 +503,13 @@ class Checkpoint5Step2RaycastTargetGame {
         );
         this.camera.lookAt(target);
 
-        // --- KIỂM TRA TARGET BLOCK MỖI FRAME VÀ LOG THEO YÊU CẦU STEP 2 ---
+        // --- TEST RAYCAST TARGET VÀ LOG CHI TIẾT THEO YÊU CẦU ---
         const targetBlock = this.getTargetBlock();
         const now = performance.now();
-        if (now - this._lastLogTime > 300) { // Log mỗi 300ms cho dễ theo dõi
+        if (now - this._lastLogTime > 400) {
             this._lastLogTime = now;
             if (targetBlock) {
-                console.log(`[TARGET] ${targetBlock.type}`, {
-                    position: targetBlock.position,
-                    normal: targetBlock.normal,
-                    distance: parseFloat(targetBlock.distance.toFixed(2))
-                });
+                console.log(`[TARGET] type: ${targetBlock.type} | pos:`, targetBlock.position, `| normal:`, targetBlock.normal, `| dist: ${targetBlock.distance.toFixed(2)}`);
             } else {
                 console.log("[TARGET] none");
             }
@@ -527,6 +531,6 @@ class Checkpoint5Step2RaycastTargetGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Step2RaycastTargetGame();
+    new Checkpoint5StepCWorldManagerGame();
 });
-                    
+            
