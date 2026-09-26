@@ -1,16 +1,18 @@
 import { createBlockInteraction } from './blockInteraction.js';
+import { createPlayerPhysics } from './playerPhysics.js'; // <--- Tích hợp module Physics STEP 1
 
 class Checkpoint5Step1Game {
     constructor() {
         try {
             this.initThree();
             this.initWorldManager();
-            this.initRaycasterAndInteraction(); // Khởi tạo module tương tác block
+            this.initRaycasterAndInteraction(); 
+            this.initPlayerPhysics(); // <--- Khởi tạo module Physics an toàn (Gravity OFF)
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 STEP 1: Module blockInteraction đã được tích hợp thành công!");
+            console.log("🟢 STEP 1: Module playerPhysics đã được tích hợp thành công ở trạng thái an toàn!");
         } catch (error) {
             this.showError(error);
         }
@@ -51,7 +53,6 @@ class Checkpoint5Step1Game {
         });
     }
 
-    // --- NO-DISPOSE ZONE: Shared Resources ---
     createBlockMaterials() {
         const createPixelTexture = (drawCallback) => {
             const canvas = document.createElement('canvas');
@@ -153,17 +154,15 @@ class Checkpoint5Step1Game {
             return true;
         };
 
-        // --- Hàm bọc lấy mảng mesh theo đúng tiêu chuẩn Hội đồng ---
         this.getBlockMeshes = () => this.blockMeshes;
 
-        // --- MỞ RỘNG MẶT ĐẤT THẬT RỘNG RÃI ---
+        // Mật độ mặt đất rộng rãi
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, 'grass');
             }
         }
         
-        // Vài khối block mẫu ở giữa sân để test
         this.addBlock(-2, 0, -5, 'grass');
         this.addBlock(0, 0, -5, 'dirt');
         this.addBlock(2, 0, -5, 'stone');
@@ -171,8 +170,6 @@ class Checkpoint5Step1Game {
 
     initRaycasterAndInteraction() {
         this.raycaster = new THREE.Raycaster();
-
-        // Khởi tạo module blockInteraction với Dependency Injection chuẩn mực
         this.blockInteraction = createBlockInteraction({
             scene: this.scene,
             camera: this.camera,
@@ -185,6 +182,17 @@ class Checkpoint5Step1Game {
             },
             getBlockMeshes: this.getBlockMeshes,
             raycaster: this.raycaster
+        });
+    }
+
+    initPlayerPhysics() {
+        // Kết nối module physics ở STEP 1 (chưa bật gravity)
+        this.playerPhysics = createPlayerPhysics({
+            camera: this.camera,
+            world: {
+                has: this.hasBlock,
+                get: this.getBlock
+            }
         });
     }
 
@@ -505,4 +513,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-                
+            
