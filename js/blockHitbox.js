@@ -40,26 +40,28 @@ export function createBlockHitbox({ world, playerRadius = 0.3, playerHeight = 1.
         if (!isGrounded) return null;
         
         const tryPos = currentPos.clone();
-        tryPos.y += 1.0; // Thử nhấc lên 1 tầng
+        tryPos.y += 1.0; 
         tryPos[axis] += step;
         
         if (!checkCollision(tryPos)) {
             const belowPos = tryPos.clone();
             belowPos.y -= 1.1;
             if (checkCollision(belowPos)) {
-                return tryPos; // Hợp lệ: leo lên được block cao 1 tầng
+                return tryPos; 
             }
         }
-        return null; // Không hợp lệ hoặc quá cao (>= 2 tầng): chặn lại
+        return null; 
     }
 
+    // Sửa lỗi chặn đặt block: Giảm nhẹ biên AABB của player khi check đặt block để không bị cản tay cản chân oan
     function isPlayerIntersectingBlock(playerPos, bx, by, bz) {
-        const pMinX = playerPos.x - playerRadius;
-        const pMaxX = playerPos.x + playerRadius;
+        const tolerance = 0.15; // Tạo khoảng đệm nhỏ để đặt block mượt mà hơn
+        const pMinX = playerPos.x - playerRadius + tolerance;
+        const pMaxX = playerPos.x + playerRadius - tolerance;
         const pMinY = playerPos.y - playerHeight;
         const pMaxY = playerPos.y;
-        const pMinZ = playerPos.z - playerRadius;
-        const pMaxZ = playerPos.z + playerRadius;
+        const pMinZ = playerPos.z - playerRadius + tolerance;
+        const pMaxZ = playerPos.z + playerRadius - tolerance;
 
         const bMinX = bx - 0.5, bMaxX = bx + 0.5;
         const bMinY = by - 0.5, bMaxY = by + 0.5;
