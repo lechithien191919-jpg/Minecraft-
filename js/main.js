@@ -1,27 +1,21 @@
 import { createBlockInteraction } from './blockInteraction.js';
-import { createPlayerPhysics } from './playerPhysics.js';
+import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
 
-class Checkpoint5Step1Game {
+class Checkpoint5PlanBGame {
     constructor() {
         try {
             this.initThree();
             this.initWorldManager();
+            this.initBlockHitbox();
             this.initRaycasterAndInteraction(); 
-            this.initPlayerPhysics(); 
             this.initCrosshair();
             this.initHotbarUI();
             this.initControls();
             
             this.clock = new THREE.Clock();
-            
-            // Biến theo dõi log
-            this.logTimer = 0;
-            this.minYObserved = 999;
-            this.maxYObserved = -999;
-
             this.animate();
-            console.log("🟢 Đã cập nhật toàn bộ hệ thống AABB Collision Chuẩn Hội Đồng!");
+            console.log("🟢 Đã khởi chạy Phương án B: Hitbox riêng biệt, giới hạn chiều cao nhảy block & viền khối thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -32,7 +26,7 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 1.2, 5); // Đặt vị trí ban đầu khớp với playerHeight 1.7 đứng trên y = -0.5 (feet = -0.5 -> pos.y = 1.2)
+        this.camera.position.set(0, 1.2, 5);
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -65,13 +59,8 @@ class Checkpoint5Step1Game {
 
         this.getKey = (x, y, z) => `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 
-        this.hasBlock = (x, y, z) => {
-            return this.worldBlocks.has(this.getKey(x, y, z));
-        };
-
-        this.getBlock = (x, y, z) => {
-            return this.worldBlocks.get(this.getKey(x, y, z)) || null;
-        };
+        this.hasBlock = (x, y, z) => this.worldBlocks.has(this.getKey(x, y, z));
+        this.getBlock = (x, y, z) => this.worldBlocks.get(this.getKey(x, y, z)) || null;
 
         this.addBlock = (x, y, z, type) => {
             const key = this.getKey(x, y, z);
@@ -80,6 +69,13 @@ class Checkpoint5Step1Game {
             const geo = new THREE.BoxGeometry(1, 1, 1);
             const mat = this.materials[type] || this.materials.grass;
             const mesh = new THREE.Mesh(geo, mat);
+            
+            // THÊM VIỀN CHO BLOCK (Giúp phân biệt không gian rõ ràng)
+            const edgesGeo = new THREE.EdgesGeometry(geo);
+            const edgesMat = new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 1 });
+            const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+            mesh.add(wireframe);
+
             mesh.position.set(x, y, z);
             mesh.userData = { type, x, y, z };
 
@@ -96,9 +92,7 @@ class Checkpoint5Step1Game {
 
             this.scene.remove(blockData.mesh);
             const index = this.blockMeshes.indexOf(blockData.mesh);
-            if (index !== -1) {
-                this.blockMeshes.splice(index, 1);
-            }
+            if (index !== -1) this.blockMeshes.splice(index, 1);
 
             this.worldBlocks.delete(key);
             return true;
@@ -106,15 +100,27 @@ class Checkpoint5Step1Game {
 
         this.getBlockMeshes = () => this.blockMeshes;
 
+        // Tạo sàn mặt đất cơ bản
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, BLOCK_TYPES.GRASS);
             }
         }
         
-        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);
-        this.addBlock(0, 0, -5, BLOCK_TYPES.LEAVES);
-        this.addBlock(2, 0, -5, BLOCK_TYPES.STONE);
+        // Tạo các mẫu block thử nghiệm độ cao (1 tầng và 2 tầng)
+        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  // Cao 1 tầng (Có thể leo)
+        this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
+        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  // Chồng 2 tầng (Chặn đứng, không leo được)
+        this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
+    }
+
+    initBlockHitbox() {
+        // Khởi tạo module hitbox riêng biệt
+        this.blockHitbox = createBlockHitbox({
+            world: { has: this.hasBlock, get: this.getBlock },
+            playerRadius: 0.3,
+            playerHeight: 1.7
+        });
     }
 
     initRaycasterAndInteraction() {
@@ -126,20 +132,13 @@ class Checkpoint5Step1Game {
                 has: this.hasBlock,
                 get: this.getBlock,
                 addBlock: this.addBlock,
-                removeBlock: this.removeBlock,
-                hasBlock: this.hasBlock
+                removeBlock: this.removeBlock
             },
             getBlockMeshes: this.getBlockMeshes,
-            raycaster: this.raycaster
-        });
-    }
-
-    initPlayerPhysics() {
-        this.playerPhysics = createPlayerPhysics({
-            camera: this.camera,
-            world: {
-                has: this.hasBlock,
-                get: this.getBlock
+            raycaster: this.raycaster,
+            isPlayerIntersecting: (bx, by, bz) => {
+                // Kiểm tra xem vị trí đặt block có đè lên người chơi hay không
+                return this.blockHitbox.isPlayerIntersectingBlock(this.player.position, bx, by, bz);
             }
         });
     }
@@ -162,7 +161,6 @@ class Checkpoint5Step1Game {
 
     initHotbarUI() {
         this.selectedBlockType = BLOCK_TYPES.GRASS;
-
         const hotbarContainer = document.createElement('div');
         hotbarContainer.style.position = 'fixed';
         hotbarContainer.style.bottom = '15px';
@@ -176,10 +174,7 @@ class Checkpoint5Step1Game {
         hotbarContainer.style.zIndex = '9999';
         hotbarContainer.style.touchAction = 'none';
 
-        hotbarContainer.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        });
+        hotbarContainer.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
 
         const items = [
             { type: BLOCK_TYPES.GRASS, label: 'CỎ', color: '#559933' },
@@ -190,35 +185,25 @@ class Checkpoint5Step1Game {
         ];
 
         this.hotbarSlots = [];
-
         items.forEach((item, index) => {
             const slot = document.createElement('div');
             slot.innerText = item.label;
-            slot.style.width = '52px';
-            slot.style.height = '42px';
+            slot.style.width = '52px'; slot.style.height = '42px';
             slot.style.background = index === 0 ? item.color : '#333333';
             slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
-            slot.style.borderRadius = '6px';
-            slot.style.display = 'flex';
-            slot.style.alignItems = 'center';
-            slot.style.justifyContent = 'center';
-            slot.style.fontSize = '11px';
-            slot.style.color = '#ffffff';
-            slot.style.fontWeight = 'bold';
-            slot.style.cursor = 'pointer';
-            slot.style.userSelect = 'none';
-            slot.style.touchAction = 'none';
+            slot.style.borderRadius = '6px'; slot.style.display = 'flex';
+            slot.style.alignItems = 'center'; slot.style.justifyContent = 'center';
+            slot.style.fontSize = '11px'; slot.style.color = '#ffffff'; slot.style.fontWeight = 'bold';
+            slot.style.cursor = 'pointer'; slot.style.userSelect = 'none'; slot.style.touchAction = 'none';
 
             slot.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 this.selectSlot(index, item.type, item.color);
             });
 
             hotbarContainer.appendChild(slot);
             this.hotbarSlots.push(slot);
         });
-
         document.body.appendChild(hotbarContainer);
     }
 
@@ -226,11 +211,9 @@ class Checkpoint5Step1Game {
         this.selectedBlockType = type;
         this.hotbarSlots.forEach((slot, i) => {
             if (i === index) {
-                slot.style.border = '3px solid #ffff00';
-                slot.style.background = color;
+                slot.style.border = '3px solid #ffff00'; slot.style.background = color;
             } else {
-                slot.style.border = '2px solid #ffffff';
-                slot.style.background = '#333333';
+                slot.style.border = '2px solid #ffffff'; slot.style.background = '#333333';
             }
         });
     }
@@ -243,32 +226,20 @@ class Checkpoint5Step1Game {
             isGrounded: true
         };
 
-        this.lon = 0;
-        this.lat = 0;
-        this.targetLon = 0;
-        this.targetLat = 0;
+        this.lon = 0; this.lat = 0;
+        this.targetLon = 0; this.targetLat = 0;
         this.moveVector = new THREE.Vector2(0, 0);
 
         const ui = document.createElement('div');
-        ui.style.position = 'fixed';
-        ui.style.top = '0';
-        ui.style.left = '0';
-        ui.style.width = '100%';
-        ui.style.height = '100%';
-        ui.style.zIndex = '999';
-        ui.style.pointerEvents = 'none';
-        ui.style.touchAction = 'none';
+        ui.style.position = 'fixed'; ui.style.top = '0'; ui.style.left = '0';
+        ui.style.width = '100%'; ui.style.height = '100%'; ui.style.zIndex = '999';
+        ui.style.pointerEvents = 'none'; ui.style.touchAction = 'none';
         document.body.appendChild(ui);
 
         const btnBox = document.createElement('div');
-        btnBox.style.position = 'absolute';
-        btnBox.style.right = '20px';
-        btnBox.style.bottom = '80px';
-        btnBox.style.display = 'grid';
-        btnBox.style.gridTemplateColumns = 'repeat(2, 60px)';
-        btnBox.style.gap = '8px';
-        btnBox.style.pointerEvents = 'auto';
-        btnBox.style.touchAction = 'none';
+        btnBox.style.position = 'absolute'; btnBox.style.right = '20px'; btnBox.style.bottom = '80px';
+        btnBox.style.display = 'grid'; btnBox.style.gridTemplateColumns = 'repeat(2, 60px)';
+        btnBox.style.gap = '8px'; btnBox.style.pointerEvents = 'auto'; btnBox.style.touchAction = 'none';
 
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
@@ -279,50 +250,33 @@ class Checkpoint5Step1Game {
 
         actions.forEach(item => {
             const b = document.createElement('button');
-            b.innerText = item.text;
-            b.style.width = '60px';
-            b.style.height = '60px';
-            b.style.borderRadius = '50%';
-            b.style.background = 'rgba(0, 0, 0, 0.6)';
-            b.style.color = '#fff';
-            b.style.border = '2px solid #fff';
-            b.style.fontWeight = 'bold';
-            b.style.pointerEvents = 'auto';
-            b.style.touchAction = 'none';
+            b.innerText = item.text; b.style.width = '60px'; b.style.height = '60px';
+            b.style.borderRadius = '50%'; b.style.background = 'rgba(0, 0, 0, 0.6)';
+            b.style.color = '#fff'; b.style.border = '2px solid #fff'; b.style.fontWeight = 'bold';
+            b.style.pointerEvents = 'auto'; b.style.touchAction = 'none';
 
             b.addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 item.cb();
             });
-
             btnBox.appendChild(b);
         });
         ui.appendChild(btnBox);
 
-        const outerSize = 120;
-        const innerSize = 50;
-
+        const outerSize = 120, innerSize = 50;
         const joyOuter = document.createElement('div');
-        joyOuter.style.position = 'absolute';
-        joyOuter.style.left = '30px';
-        joyOuter.style.bottom = '80px';
-        joyOuter.style.width = `${outerSize}px`;
-        joyOuter.style.height = `${outerSize}px`;
-        joyOuter.style.borderRadius = '50%';
-        joyOuter.style.background = 'rgba(255, 255, 255, 0.2)';
+        joyOuter.style.position = 'absolute'; joyOuter.style.left = '30px'; joyOuter.style.bottom = '80px';
+        joyOuter.style.width = `${outerSize}px`; joyOuter.style.height = `${outerSize}px`;
+        joyOuter.style.borderRadius = '50%'; joyOuter.style.background = 'rgba(255, 255, 255, 0.2)';
         joyOuter.style.border = '2px solid rgba(255, 255, 255, 0.5)';
-        joyOuter.style.pointerEvents = 'auto';
-        joyOuter.style.touchAction = 'none';
+        joyOuter.style.pointerEvents = 'auto'; joyOuter.style.touchAction = 'none';
 
         const joyInner = document.createElement('div');
         joyInner.style.position = 'absolute';
         joyInner.style.left = `${(outerSize - innerSize) / 2}px`;
         joyInner.style.top = `${(outerSize - innerSize) / 2}px`;
-        joyInner.style.width = `${innerSize}px`;
-        joyInner.style.height = `${innerSize}px`;
-        joyInner.style.borderRadius = '50%';
-        joyInner.style.background = 'rgba(255, 255, 255, 0.8)';
+        joyInner.style.width = `${innerSize}px`; joyInner.style.height = `${innerSize}px`;
+        joyInner.style.borderRadius = '50%'; joyInner.style.background = 'rgba(255, 255, 255, 0.8)';
         joyInner.style.pointerEvents = 'none';
 
         joyOuter.appendChild(joyInner);
@@ -335,18 +289,14 @@ class Checkpoint5Step1Game {
 
         joyOuter.addEventListener('pointerdown', (e) => {
             if (!joyActive) {
-                e.preventDefault();
-                e.stopPropagation();
-                joyActive = true;
-                joyPointerId = e.pointerId;
+                e.preventDefault(); e.stopPropagation();
+                joyActive = true; joyPointerId = e.pointerId;
                 const r = joyOuter.getBoundingClientRect();
-                center.x = r.left + r.width / 2;
-                center.y = r.top + r.height / 2;
+                center.x = r.left + r.width / 2; center.y = r.top + r.height / 2;
             }
         });
 
         let activeLookPointers = new Map();
-
         window.addEventListener('pointerdown', (e) => {
             if (e.pointerId !== joyPointerId) {
                 activeLookPointers.set(e.pointerId, { lastX: e.clientX, lastY: e.clientY });
@@ -377,21 +327,17 @@ class Checkpoint5Step1Game {
                 this.targetLat += deltaY * 0.4;
                 this.targetLat = Math.max(-85, Math.min(85, this.targetLat));
 
-                pData.lastX = e.clientX;
-                pData.lastY = e.clientY;
+                pData.lastX = e.clientX; pData.lastY = e.clientY;
             }
         });
 
         const releasePointer = (e) => {
             if (e.pointerId === joyPointerId) {
-                joyActive = false;
-                joyPointerId = null;
+                joyActive = false; joyPointerId = null;
                 joyInner.style.transform = `translate(0px, 0px)`;
                 this.moveVector.set(0, 0);
             }
-            if (activeLookPointers.has(e.pointerId)) {
-                activeLookPointers.delete(e.pointerId);
-            }
+            if (activeLookPointers.has(e.pointerId)) activeLookPointers.delete(e.pointerId);
         };
 
         window.addEventListener('pointerup', releasePointer);
@@ -405,13 +351,38 @@ class Checkpoint5Step1Game {
         }
     }
 
+    // Hàm Sub-step Movement chống xuyên tường kết hợp Step-up của Hitbox riêng
+    moveAxisSafely(axis, delta) {
+        const MAX_STEP = 0.4;
+        let remaining = delta;
+
+        while (Math.abs(remaining) > 0.0001) {
+            const step = Math.sign(remaining) * Math.min(Math.abs(remaining), MAX_STEP);
+            const testPos = this.player.position.clone();
+            testPos[axis] += step;
+
+            if (this.blockHitbox.checkCollision(testPos)) {
+                const stepUpResult = this.blockHitbox.tryStepUp(this.player.position, axis, step, this.player.isGrounded);
+                if (stepUpResult) {
+                    this.player.position.y = stepUpResult.y;
+                    this.player.position[axis] += step;
+                } else {
+                    break;
+                }
+            } else {
+                this.player.position[axis] += step;
+            }
+            remaining -= step;
+        }
+    }
+
     update() {
         const dt = Math.min(this.clock.getDelta(), 0.1);
 
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        // 1. X và Z Collision độc lập
+        // 1. Xử lý di chuyển ngang với Sub-step chống xuyên block
         if (this.moveVector.lengthSq() > 0) {
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
@@ -422,24 +393,23 @@ class Checkpoint5Step1Game {
             const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
 
             const moveSpeed = this.player.speed * dt;
-            const deltaMove = new THREE.Vector3();
-            deltaMove.addScaledVector(forwardDir, -this.moveVector.y * moveSpeed);
-            deltaMove.addScaledVector(sideDir, this.moveVector.x * moveSpeed);
+            const deltaMoveX = (-this.moveVector.y * forwardDir.x + this.moveVector.x * sideDir.x) * moveSpeed;
+            const deltaMoveZ = (-this.moveVector.y * forwardDir.z + this.moveVector.x * sideDir.z) * moveSpeed;
 
-            const testX = this.player.position.clone();
-            testX.x += deltaMove.x;
-            if (!this.playerPhysics.checkCollision(testX)) {
-                this.player.position.x = testX.x;
-            }
+            const combinedTest = this.player.position.clone();
+            combinedTest.x += deltaMoveX;
+            combinedTest.z += deltaMoveZ;
 
-            const testZ = this.player.position.clone();
-            testZ.z += deltaMove.z;
-            if (!this.playerPhysics.checkCollision(testZ)) {
-                this.player.position.z = testZ.z;
+            if (!this.blockHitbox.checkCollision(combinedTest)) {
+                this.player.position.x = combinedTest.x;
+                this.player.position.z = combinedTest.z;
+            } else {
+                this.moveAxisSafely('x', deltaMoveX);
+                this.moveAxisSafely('z', deltaMoveZ);
             }
         }
 
-        // 2. Y Physics & Gravity
+        // 2. Trọng lực và Va chạm trục Y
         if (!this.player.isGrounded) {
             this.player.velocity.y -= 22.0 * dt;
         } else {
@@ -449,12 +419,12 @@ class Checkpoint5Step1Game {
         const nextYPos = this.player.position.clone();
         nextYPos.y += this.player.velocity.y * dt;
 
-        if (this.playerPhysics.checkCollision(nextYPos)) {
+        if (this.blockHitbox.checkCollision(nextYPos)) {
             if (this.player.velocity.y < 0) {
-                const feetY = nextYPos.y - this.playerPhysics.playerHeight;
-                const blockTopY = Math.floor(feetY) + 0.5; // Công thức snap chuẩn xác theo hội đồng
+                const feetY = nextYPos.y - this.blockHitbox.playerHeight;
+                const blockTopY = Math.floor(feetY) + 0.5;
                 
-                this.player.position.y = blockTopY + this.playerPhysics.playerHeight;
+                this.player.position.y = blockTopY + this.blockHitbox.playerHeight;
                 this.player.velocity.y = 0;
                 this.player.isGrounded = true;
             } else {
@@ -463,21 +433,14 @@ class Checkpoint5Step1Game {
         } else {
             this.player.position.y = nextYPos.y;
             
-            // Kiểm tra vùng đệm mặt đất nhẹ nhàng
             const looseCheck = this.player.position.clone();
             looseCheck.y -= 0.05;
-            if (this.playerPhysics.checkCollision(looseCheck)) {
+            if (this.blockHitbox.checkCollision(looseCheck)) {
                 this.player.isGrounded = true;
                 if (this.player.velocity.y < 0) this.player.velocity.y = 0;
             } else {
                 this.player.isGrounded = false;
             }
-        }
-
-        // Ghi nhận min/max phục vụ log
-        if (this.player.isGrounded) {
-            if (this.player.position.y < this.minYObserved) this.minYObserved = this.player.position.y;
-            if (this.player.position.y > this.maxYObserved) this.maxYObserved = this.player.position.y;
         }
 
         // 3. Camera LookAt
@@ -489,19 +452,6 @@ class Checkpoint5Step1Game {
             this.camera.position.z + 10 * Math.sin(phi) * Math.cos(theta)
         );
         this.camera.lookAt(target);
-
-        // Xuất Log kiểm tra sau 3 giây
-        this.logTimer++;
-        if (this.logTimer === 180) {
-            const deltaY = (this.maxYObserved - this.minYObserved).toFixed(6);
-            console.log(
-`[FIX REPORT HỘI ĐỒNG - AABB SUCCESS]
-- player.y min = ${this.minYObserved.toFixed(6)}
-- player.y max = ${this.maxYObserved.toFixed(6)}
-- DeltaY = ${deltaY}
-- Trạng thái Grounded: ${this.player.isGrounded}`
-            );
-        }
     }
 
     showError(err) {
@@ -519,6 +469,6 @@ class Checkpoint5Step1Game {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Step1Game();
+    new Checkpoint5PlanBGame();
 });
-            
+                                  
