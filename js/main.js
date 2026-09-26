@@ -13,7 +13,6 @@ class Checkpoint5Step1Game {
             this.initHotbarUI();
             this.initControls();
             
-            // Khởi tạo Clock để đo dt chuẩn xác
             this.clock = new THREE.Clock();
             
             // Biến theo dõi log
@@ -22,7 +21,7 @@ class Checkpoint5Step1Game {
             this.maxYObserved = -999;
 
             this.animate();
-            console.log("🟢 Đã fix triệt để Jitter Physics bằng Delta Time & Stable Grounding!");
+            console.log("🟢 Đã áp dụng 3 thay đổi fix Jitter theo lệnh Hội Đồng!");
         } catch (error) {
             this.showError(error);
         }
@@ -240,7 +239,7 @@ class Checkpoint5Step1Game {
         this.player = {
             position: this.camera.position,
             velocity: new THREE.Vector3(),
-            speed: 4.5, // Tốc độ di chuyển theo giây
+            speed: 4.5,
             isGrounded: true
         };
 
@@ -402,21 +401,19 @@ class Checkpoint5Step1Game {
     jump() {
         if (this.player.isGrounded) {
             this.player.isGrounded = false;
-            this.player.velocity.y = 6.5; // Lực nhảy chuẩn theo giây
+            this.player.velocity.y = 6.5;
         }
     }
 
     update() {
-        const dt = Math.min(this.clock.getDelta(), 0.1); // Giới hạn dt tối đa tránh giật khung hình
+        const dt = Math.min(this.clock.getDelta(), 0.1);
 
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        const epsilon = 0.001;
-
-        // 1. Gravity (nhân với dt)
+        // 1. Gravity
         if (!this.player.isGrounded) {
-            this.player.velocity.y -= 22.0 * dt; // Trọng lực chuẩn theo giây
+            this.player.velocity.y -= 22.0 * dt;
         }
 
         // 2. X và Z Collision độc lập
@@ -434,14 +431,12 @@ class Checkpoint5Step1Game {
             deltaMove.addScaledVector(forwardDir, -this.moveVector.y * moveSpeed);
             deltaMove.addScaledVector(sideDir, this.moveVector.x * moveSpeed);
 
-            // Test X
             const testX = this.player.position.clone();
             testX.x += deltaMove.x;
             if (!this.playerPhysics.checkCollision(testX)) {
                 this.player.position.x = testX.x;
             }
 
-            // Test Z
             const testZ = this.player.position.clone();
             testZ.z += deltaMove.z;
             if (!this.playerPhysics.checkCollision(testZ)) {
@@ -449,13 +444,12 @@ class Checkpoint5Step1Game {
             }
         }
 
-        // 3. Y Collision & Grounded State (Dùng Snap Y tuyệt đối khi chạm đất)
+        // 3. Y Collision & Grounded State (ĐÃ ÁP DỤNG 3 THAY ĐỔI CỦA HỘI ĐỒNG)
         const nextYPos = this.player.position.clone();
         nextYPos.y += this.player.velocity.y * dt;
 
         if (this.playerPhysics.checkCollision(nextYPos)) {
             if (this.player.velocity.y < 0) {
-                // Đang rơi xuống chạm mặt block -> SNAP Y CHUẨN XÁC
                 const feetY = nextYPos.y - this.playerPhysics.playerHeight;
                 const blockTopY = Math.floor(feetY + 0.5);
                 
@@ -463,31 +457,29 @@ class Checkpoint5Step1Game {
                 this.player.velocity.y = 0;
                 this.player.isGrounded = true;
             } else {
-                // Đập đầu vào trần
                 this.player.velocity.y = 0;
             }
         } else {
             this.player.position.y = nextYPos.y;
-            // Kiểm tra ổn định dưới chân với biên độ an toàn epsilon
+            
+            // THAY ĐỔI 1: Giảm epsilon check ground xuống 0.001
             const groundCheck = this.player.position.clone();
-            groundCheck.y -= (epsilon + 0.02);
-            this.player.isGrounded = this.playerPhysics.checkCollision(groundCheck);
-            if (!this.player.isGrounded && this.player.velocity.y > 0) {
-                // Đang nhảy lên
-            } else if (!this.player.isGrounded && this.player.velocity.y <= 0) {
-                // Đang rơi tự do
+            groundCheck.y -= 0.001;
+            
+            // THAY ĐỔI 3: Thêm Hysteresis chống lật trạng thái isGrounded
+            const stillGrounded = this.playerPhysics.checkCollision(groundCheck);
+            if (!stillGrounded && this.player.isGrounded) {
+                if (this.player.velocity.y < -0.05) {
+                    this.player.isGrounded = false;
+                }
+            } else {
+                this.player.isGrounded = stillGrounded;
             }
         }
+        
+        // (ĐÃ XÓA THAY ĐỔI 2: Đoạn snap trùng lặp ở dòng 541-549 cũ đã được triệt tiêu hoàn toàn)
 
-        // Thêm khóa cứng chống dao động biên độ nhỏ khi đứng yên trên mặt đất
-        if (this.player.isGrounded && Math.abs(this.player.velocity.y) < 0.01) {
-            const feetY = this.player.position.y - this.playerPhysics.playerHeight;
-            const blockTopY = Math.floor(feetY + 0.5);
-            this.player.position.y = blockTopY + 0.5 + this.playerPhysics.playerHeight;
-            this.player.velocity.y = 0;
-        }
-
-        // Ghi nhận min/max phục vụ xuất log kiểm tra
+        // Ghi nhận min/max phục vụ xuất log
         if (this.player.isGrounded) {
             if (this.player.position.y < this.minYObserved) this.minYObserved = this.player.position.y;
             if (this.player.position.y > this.maxYObserved) this.maxYObserved = this.player.position.y;
@@ -508,21 +500,11 @@ class Checkpoint5Step1Game {
         if (this.logTimer === 180) {
             const deltaY = (this.maxYObserved - this.minYObserved).toFixed(6);
             console.log(
-`[PHYSICS FIX REPORT]
-1. Player đứng yên 3 giây:
+`[FIX REPORT HỘI ĐỒNG]
 - player.y min = ${this.minYObserved.toFixed(6)}
 - player.y max = ${this.maxYObserved.toFixed(6)}
-- DeltaY = ${deltaY} (Đã khóa chặt, jitter triệt tiêu hoàn toàn)
-
-2. Trạng thái Grounded: ${this.player.isGrounded}
-3. X/Z Trục độc lập: PASS
-
-CASE 1 (y=2): PASS
-CASE 2 (y=5): PASS
-CASE 3 (y=10): PASS
-CASE 4 (Grounded state): PASS
-CASE 5 (Snap Y): PASS
-CASE 6 (Delta time dt): PASS`
+- DeltaY = ${deltaY}
+- Trạng thái Grounded: ${this.player.isGrounded}`
             );
         }
     }
