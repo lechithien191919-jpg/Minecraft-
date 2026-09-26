@@ -8,14 +8,14 @@ class Checkpoint5FinalGame {
             this.initThree();
             this.initWorldManager();
             this.initBlockHitbox();
-            this.initControls(); // Khởi tạo player trước để raycaster/interaction nhận diện đúng player
+            this.initControls(); 
             this.initRaycasterAndInteraction(); 
             this.initCrosshair();
             this.initHotbarUI();
             
             this.clock = new THREE.Clock();
             this.animate();
-            console.log("🟢 Đã khởi chạy hệ thống Hitbox ổn định & Viền chọn block theo tâm + thành công!");
+            console.log("🟢 Đã khởi chạy hệ thống Callback DI thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -93,7 +93,6 @@ class Checkpoint5FinalGame {
 
         this.getBlockMeshes = () => this.blockMeshes;
 
-        // Tạo khung viền chọn block (Selection Outline) khi dấu + chiếu vào
         const outlineGeo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
         const outlineEdges = new THREE.EdgesGeometry(outlineGeo);
         const outlineMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 3 });
@@ -101,14 +100,12 @@ class Checkpoint5FinalGame {
         this.selectedBlockOutline.visible = false;
         this.scene.add(this.selectedBlockOutline);
 
-        // Tạo sàn mặt đất
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, BLOCK_TYPES.GRASS);
             }
         }
         
-        // Tạo block mẫu thử nghiệm độ cao
         this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  
         this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
         this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  
@@ -262,8 +259,8 @@ class Checkpoint5FinalGame {
             },
             getBlockMeshes: this.getBlockMeshes,
             raycaster: this.raycaster,
-            player: this.player,          // 👈 Đã truyền player chuẩn xác
-            blockHitbox: this.blockHitbox // 👈 Đã truyền blockHitbox chuẩn xác
+            getPlayer: () => this.player,           // 👈 Dùng callback an toàn bất chấp thứ tự init
+            getBlockHitbox: () => this.blockHitbox  // 👈 Dùng callback an toàn bất chấp thứ tự init
         });
     }
 
@@ -379,7 +376,6 @@ class Checkpoint5FinalGame {
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        // Cập nhật Raycaster để hiển thị viền (outline) khi dấu + chiếu trúng block
         if (this.raycaster && this.selectedBlockOutline) {
             this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
             const intersects = this.raycaster.intersectObjects(this.blockMeshes);
@@ -392,7 +388,6 @@ class Checkpoint5FinalGame {
             }
         }
 
-        // 1. Di chuyển ngang với Sub-step
         if (this.moveVector.lengthSq() > 0) {
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
@@ -419,7 +414,6 @@ class Checkpoint5FinalGame {
             }
         }
 
-        // 2. Trọng lực và Va chạm trục Y
         if (!this.player.isGrounded) {
             this.player.velocity.y -= 22.0 * dt;
         } else {
@@ -453,7 +447,6 @@ class Checkpoint5FinalGame {
             }
         }
 
-        // 3. Camera LookAt
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
         const target = new THREE.Vector3(
@@ -481,4 +474,4 @@ class Checkpoint5FinalGame {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5FinalGame();
 });
-                                  
+            
