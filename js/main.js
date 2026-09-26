@@ -2,7 +2,7 @@ import { createBlockInteraction } from './blockInteraction.js';
 import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
 
-class Checkpoint5PlanBGame {
+class Checkpoint5FinalGame {
     constructor() {
         try {
             this.initThree();
@@ -15,7 +15,7 @@ class Checkpoint5PlanBGame {
             
             this.clock = new THREE.Clock();
             this.animate();
-            console.log("🟢 Đã khởi chạy Phương án B: Hitbox riêng biệt, giới hạn chiều cao nhảy block & viền khối thành công!");
+            console.log("🟢 Đã khởi chạy hệ thống Hitbox ổn định & Viền chọn block theo tâm + thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -69,13 +69,6 @@ class Checkpoint5PlanBGame {
             const geo = new THREE.BoxGeometry(1, 1, 1);
             const mat = this.materials[type] || this.materials.grass;
             const mesh = new THREE.Mesh(geo, mat);
-            
-            // THÊM VIỀN CHO BLOCK (Giúp phân biệt không gian rõ ràng)
-            const edgesGeo = new THREE.EdgesGeometry(geo);
-            const edgesMat = new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 1 });
-            const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
-            mesh.add(wireframe);
-
             mesh.position.set(x, y, z);
             mesh.userData = { type, x, y, z };
 
@@ -100,22 +93,29 @@ class Checkpoint5PlanBGame {
 
         this.getBlockMeshes = () => this.blockMeshes;
 
-        // Tạo sàn mặt đất cơ bản
+        // Tạo khung viền chọn block (Selection Outline) khi dấu + chiếu vào
+        const outlineGeo = new THREE.BoxGeometry(1.002, 1.002, 1.002);
+        const outlineEdges = new THREE.EdgesGeometry(outlineGeo);
+        const outlineMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 3 });
+        this.selectedBlockOutline = new THREE.LineSegments(outlineEdges, outlineMat);
+        this.selectedBlockOutline.visible = false;
+        this.scene.add(this.selectedBlockOutline);
+
+        // Tạo sàn mặt đất
         for (let x = -15; x <= 15; x += 1) {
             for (let z = -25; z <= 5; z += 1) {
                 this.addBlock(x, -1, z, BLOCK_TYPES.GRASS);
             }
         }
         
-        // Tạo các mẫu block thử nghiệm độ cao (1 tầng và 2 tầng)
-        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  // Cao 1 tầng (Có thể leo)
+        // Tạo block mẫu thử nghiệm độ cao (1 tầng và 2 tầng)
+        this.addBlock(-2, 0, -5, BLOCK_TYPES.WOOD);  // Cao 1 tầng (Leo được)
         this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
-        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  // Chồng 2 tầng (Chặn đứng, không leo được)
+        this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  // Cao 2 tầng (Chặn đứng)
         this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
     }
 
     initBlockHitbox() {
-        // Khởi tạo module hitbox riêng biệt
         this.blockHitbox = createBlockHitbox({
             world: { has: this.hasBlock, get: this.getBlock },
             playerRadius: 0.3,
@@ -137,7 +137,6 @@ class Checkpoint5PlanBGame {
             getBlockMeshes: this.getBlockMeshes,
             raycaster: this.raycaster,
             isPlayerIntersecting: (bx, by, bz) => {
-                // Kiểm tra xem vị trí đặt block có đè lên người chơi hay không
                 return this.blockHitbox.isPlayerIntersectingBlock(this.player.position, bx, by, bz);
             }
         });
@@ -151,7 +150,7 @@ class Checkpoint5PlanBGame {
         crosshair.style.top = '50%';
         crosshair.style.left = '50%';
         crosshair.style.transform = 'translate(-50%, -50%)';
-        crosshair.style.color = 'rgba(255, 255, 255, 0.8)';
+        crosshair.style.color = 'rgba(255, 255, 255, 0.9)';
         crosshair.style.fontSize = '24px';
         crosshair.style.fontWeight = 'bold';
         crosshair.style.zIndex = '500';
@@ -351,7 +350,6 @@ class Checkpoint5PlanBGame {
         }
     }
 
-    // Hàm Sub-step Movement chống xuyên tường kết hợp Step-up của Hitbox riêng
     moveAxisSafely(axis, delta) {
         const MAX_STEP = 0.4;
         let remaining = delta;
@@ -382,7 +380,20 @@ class Checkpoint5PlanBGame {
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        // 1. Xử lý di chuyển ngang với Sub-step chống xuyên block
+        // Cập nhật Raycaster để hiển thị viền (outline) khi dấu + chiếu trúng block
+        if (this.raycaster && this.selectedBlockOutline) {
+            this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const intersects = this.raycaster.intersectObjects(this.blockMeshes);
+            if (intersects.length > 0 && intersects[0].distance < 6) {
+                const targetMesh = intersects[0].object;
+                this.selectedBlockOutline.position.copy(targetMesh.position);
+                this.selectedBlockOutline.visible = true;
+            } else {
+                this.selectedBlockOutline.visible = false;
+            }
+        }
+
+        // 1. Di chuyển ngang với Sub-step
         if (this.moveVector.lengthSq() > 0) {
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
@@ -469,6 +480,6 @@ class Checkpoint5PlanBGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5PlanBGame();
+    new Checkpoint5FinalGame();
 });
-                                  
+            
