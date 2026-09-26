@@ -21,7 +21,7 @@ class Checkpoint5Step1Game {
             this.maxYObserved = -999;
 
             this.animate();
-            console.log("🟢 Đã cập nhật Skip Update Khi Stable theo lệnh Hội Đồng!");
+            console.log("🟢 Đã cập nhật toàn bộ hệ thống AABB Collision Chuẩn Hội Đồng!");
         } catch (error) {
             this.showError(error);
         }
@@ -32,7 +32,7 @@ class Checkpoint5Step1Game {
         this.scene.background = new THREE.Color(0x87CEEB);
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 1.7, 5);
+        this.camera.position.set(0, 1.2, 5); // Đặt vị trí ban đầu khớp với playerHeight 1.7 đứng trên y = -0.5 (feet = -0.5 -> pos.y = 1.2)
 
         this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -411,15 +411,7 @@ class Checkpoint5Step1Game {
         this.lon += (this.targetLon - this.lon) * 15 * dt;
         this.lat += (this.targetLat - this.lat) * 15 * dt;
 
-        // KIỂM TRA TRẠNG THÁI STABLE (ĐỨNG YÊN)
-        const isStable = this.player.isGrounded && Math.abs(this.player.velocity.y) < 0.001;
-
-        // 1. Gravity (chỉ chạy khi không stable)
-        if (!isStable && !this.player.isGrounded) {
-            this.player.velocity.y -= 22.0 * dt;
-        }
-
-        // 2. X và Z Collision độc lập (luôn chạy)
+        // 1. X và Z Collision độc lập
         if (this.moveVector.lengthSq() > 0) {
             const phi = THREE.MathUtils.degToRad(90 - this.lat);
             const theta = THREE.MathUtils.degToRad(this.lon);
@@ -447,64 +439,48 @@ class Checkpoint5Step1Game {
             }
         }
 
-        // Nếu đang đứng yên mà người chơi di chuyển ngang ra khỏi mép -> mất grounded
-        if (isStable && (this.moveVector.x !== 0 || this.moveVector.y !== 0)) {
-            const checkPos = this.player.position.clone();
-            checkPos.y -= 0.05;
-            if (!this.playerPhysics.checkCollision(checkPos)) {
+        // 2. Y Physics & Gravity
+        if (!this.player.isGrounded) {
+            this.player.velocity.y -= 22.0 * dt;
+        } else {
+            this.player.velocity.y = 0;
+        }
+
+        const nextYPos = this.player.position.clone();
+        nextYPos.y += this.player.velocity.y * dt;
+
+        if (this.playerPhysics.checkCollision(nextYPos)) {
+            if (this.player.velocity.y < 0) {
+                const feetY = nextYPos.y - this.playerPhysics.playerHeight;
+                const blockTopY = Math.floor(feetY) + 0.5; // Công thức snap chuẩn xác theo hội đồng
+                
+                this.player.position.y = blockTopY + this.playerPhysics.playerHeight;
+                this.player.velocity.y = 0;
+                this.player.isGrounded = true;
+            } else {
+                this.player.velocity.y = 0;
+            }
+        } else {
+            this.player.position.y = nextYPos.y;
+            
+            // Kiểm tra vùng đệm mặt đất nhẹ nhàng
+            const looseCheck = this.player.position.clone();
+            looseCheck.y -= 0.05;
+            if (this.playerPhysics.checkCollision(looseCheck)) {
+                this.player.isGrounded = true;
+                if (this.player.velocity.y < 0) this.player.velocity.y = 0;
+            } else {
                 this.player.isGrounded = false;
             }
         }
 
-        // 3. Y Collision & Physics (CHỈ CHẠY KHI KHÔNG STABLE)
-        if (!isStable) {
-            const nextYPos = this.player.position.clone();
-            nextYPos.y += this.player.velocity.y * dt;
-
-            if (this.playerPhysics.checkCollision(nextYPos)) {
-                if (this.player.velocity.y < 0) {
-                    const feetY = nextYPos.y - this.playerPhysics.playerHeight;
-                    const blockTopY = Math.floor(feetY + 0.5);
-                    
-                    this.player.position.y = blockTopY + 0.5 + this.playerPhysics.playerHeight;
-                    this.player.velocity.y = 0;
-                    this.player.isGrounded = true;
-                } else {
-                    this.player.velocity.y = 0;
-                }
-            } else {
-                this.player.position.y = nextYPos.y;
-                
-                const tightCheck = this.player.position.clone();
-                tightCheck.y -= 0.001;
-                const tightGrounded = this.playerPhysics.checkCollision(tightCheck);
-
-                if (tightGrounded) {
-                    this.player.isGrounded = true;
-                    if (this.player.velocity.y < 0) {
-                        this.player.velocity.y = 0;
-                    }
-                } else {
-                    const looseCheck = this.player.position.clone();
-                    looseCheck.y -= 0.05;
-                    const looseGrounded = this.playerPhysics.checkCollision(looseCheck);
-                    
-                    if (this.player.isGrounded && looseGrounded) {
-                        // Giữ nguyên grounded trong vùng đệm
-                    } else {
-                        this.player.isGrounded = false;
-                    }
-                }
-            }
-        }
-
-        // Ghi nhận min/max phục vụ xuất log kiểm tra
+        // Ghi nhận min/max phục vụ log
         if (this.player.isGrounded) {
             if (this.player.position.y < this.minYObserved) this.minYObserved = this.player.position.y;
             if (this.player.position.y > this.maxYObserved) this.maxYObserved = this.player.position.y;
         }
 
-        // 4. Camera LookAt
+        // 3. Camera LookAt
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
         const target = new THREE.Vector3(
@@ -514,12 +490,12 @@ class Checkpoint5Step1Game {
         );
         this.camera.lookAt(target);
 
-        // Xuất Log số liệu kiểm tra sau 3 giây hoạt động
+        // Xuất Log kiểm tra sau 3 giây
         this.logTimer++;
         if (this.logTimer === 180) {
             const deltaY = (this.maxYObserved - this.minYObserved).toFixed(6);
             console.log(
-`[FIX REPORT HỘI ĐỒNG - STABLE SKIP]
+`[FIX REPORT HỘI ĐỒNG - AABB SUCCESS]
 - player.y min = ${this.minYObserved.toFixed(6)}
 - player.y max = ${this.maxYObserved.toFixed(6)}
 - DeltaY = ${deltaY}
@@ -545,4 +521,4 @@ class Checkpoint5Step1Game {
 window.addEventListener('DOMContentLoaded', () => {
     new Checkpoint5Step1Game();
 });
-             
+                
