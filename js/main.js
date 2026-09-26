@@ -1,4 +1,4 @@
-class Checkpoint5Step2BreakGame {
+class Checkpoint5Layer0EventTestGame {
     constructor() {
         try {
             this.initThree();
@@ -7,7 +7,7 @@ class Checkpoint5Step2BreakGame {
             this.initHotbarUI();
             this.initControls();
             this.animate();
-            console.log("🟢 BƯỚC 2: Hệ thống ĐẬP an toàn đã khởi chạy thành công!");
+            console.log("🟢 LỚP 0 (EVENT TEST) — Đã khởi chạy thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -40,10 +40,6 @@ class Checkpoint5Step2BreakGame {
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(10, 20, 10);
         this.scene.add(dirLight);
-
-        // Khởi tạo Raycaster cho việc đập block từ tâm màn hình
-        this.raycaster = new THREE.Raycaster();
-        this.centerScreenVector = new THREE.Vector2(0, 0);
 
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -227,46 +223,6 @@ class Checkpoint5Step2BreakGame {
         console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
-    // --- ⛏️ HỆ THỐNG ĐẬP BLOCK AN TOÀN (KHÔNG DISPOSE MATERIAL DÙNG CHUNG) ---
-    breakBlock() {
-        if (!this.raycaster || !this.camera || !this.scene) return;
-
-        // Cập nhật raycast từ tâm màn hình
-        this.raycaster.setFromCamera(this.centerScreenVector, this.camera);
-
-        // Lấy danh sách mesh từ các block hiện có trong thế giới
-        const blockMeshes = this.worldBlocks.map(b => b.mesh);
-        const intersects = this.raycaster.intersectObjects(blockMeshes, false);
-
-        // Kiểm tra an toàn: nếu mảng rỗng hoặc không trúng thì bỏ qua
-        if (!intersects || intersects.length === 0) {
-            console.log("⛏️ Raycast không trúng block nào.");
-            return;
-        }
-
-        const hit = intersects[0];
-        const hitMesh = hit.object;
-
-        // Tìm block tương ứng trong mảng quản lý
-        const index = this.worldBlocks.findIndex(b => b.mesh === hitMesh);
-        if (index !== -1) {
-            const targetBlock = this.worldBlocks[index];
-            console.log(`⛏️ Đập thành công block ID: ${targetBlock.id} (${targetBlock.type})`);
-
-            // 1. Gỡ mesh khỏi Scene
-            this.scene.remove(targetBlock.mesh);
-
-            // 2. GIỮ AN TOÀN MATERIAL: Tuyệt đối KHÔNG gọi .dispose() trên mảng material dùng chung!
-            // Chỉ dọn dẹp geometry riêng của mesh đó để tiết kiệm bộ nhớ
-            if (targetBlock.mesh.geometry) {
-                targetBlock.mesh.geometry.dispose();
-            }
-
-            // 3. Xóa khỏi mảng quản lý worldBlocks
-            this.worldBlocks.splice(index, 1);
-        }
-    }
-
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -300,15 +256,31 @@ class Checkpoint5Step2BreakGame {
         btnBox.style.gap = '8px';
         btnBox.style.pointerEvents = 'auto';
 
+        // --- 🎯 LỚP 0: EVENT TEST CHÍNH XÁC CHO NÚT ĐẬP & ĐẶT ---
         const actions = [
-            { text: 'ĐỔI', cb: () => {} },
-            { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log("🧱 ĐẶT CHƯA ĐƯỢC PHÉP Ở BƯỚC NÀY"); } },
-            { text: 'ĐẬP', cb: () => { this.breakBlock(); } }
+            { id: 'btn-switch', text: 'ĐỔI', cb: (e) => { console.log(`SWITCH fired — Target ID: ${e.target.id || 'none'}`); } },
+            { id: 'btn-jump', text: 'NHẢY', cb: (e) => { this.jump(); console.log(`JUMP fired — Target ID: ${e.target.id || 'none'}`); } },
+            { 
+                id: 'btn-place', 
+                text: 'ĐẶT', 
+                cb: (e) => { 
+                    console.log(`PLACE fired: YES`);
+                    console.log(`Target ID: ${e.target.id || 'btn-place'}`); 
+                } 
+            },
+            { 
+                id: 'btn-break', 
+                text: 'ĐẬP', 
+                cb: (e) => { 
+                    console.log(`BREAK fired: YES`);
+                    console.log(`Target ID: ${e.target.id || 'btn-break'}`); 
+                } 
+            }
         ];
 
         actions.forEach(item => {
             const b = document.createElement('button');
+            b.id = item.id;
             b.innerText = item.text;
             b.style.width = '60px';
             b.style.height = '60px';
@@ -318,10 +290,14 @@ class Checkpoint5Step2BreakGame {
             b.style.border = '2px solid #fff';
             b.style.fontWeight = 'bold';
             b.style.pointerEvents = 'auto';
+
+            // Dùng pointerdown để test event chuẩn xác, chặn bọt sự kiện hoàn toàn không lọt ra camera
             b.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
-                item.cb();
+                e.preventDefault();
+                item.cb(e);
             });
+
             btnBox.appendChild(b);
         });
         ui.appendChild(btnBox);
@@ -431,7 +407,6 @@ class Checkpoint5Step2BreakGame {
         if (!this.player.isJumping) {
             this.player.isJumping = true;
             this.player.velocity.y = 0.15;
-            console.log("🦘 Jump triggered!");
         }
     }
 
@@ -488,6 +463,6 @@ class Checkpoint5Step2BreakGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint5Step2BreakGame();
+    new Checkpoint5Layer0EventTestGame();
 });
             
