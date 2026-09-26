@@ -1,6 +1,7 @@
 import { createBlockInteraction } from './blockInteraction.js';
 import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
+import { TreeGenerator } from './treeGenerator.js';
 
 class Checkpoint5FinalGame {
     constructor() {
@@ -110,6 +111,17 @@ class Checkpoint5FinalGame {
         this.addBlock(0, 0, -5, BLOCK_TYPES.STONE);
         this.addBlock(0, 1, -5, BLOCK_TYPES.STONE);  
         this.addBlock(2, 0, -5, BLOCK_TYPES.LEAVES);
+
+        // --- KÍCH HOẠT SINH RỪNG VOXEL (ĐỢT 2) ---
+        const worldInterface = {
+            has: (x, y, z) => this.hasBlock(x, y, z),
+            addBlock: (x, y, z, type) => this.addBlock(x, y, z, type)
+        };
+
+        const treeGen = new TreeGenerator(worldInterface, 8.0);
+        treeGen.generateTrees(15, 5.0);
+        this.trees = treeGen.trees;
+        console.log("[MAIN] Đã kích hoạt sinh rừng voxel thành công! Tổng số cây:", treeGen.trees.length);
     }
 
     initBlockHitbox() {
@@ -259,8 +271,8 @@ class Checkpoint5FinalGame {
             },
             getBlockMeshes: this.getBlockMeshes,
             raycaster: this.raycaster,
-            getPlayer: () => this.player,           // 👈 Dùng callback an toàn bất chấp thứ tự init
-            getBlockHitbox: () => this.blockHitbox  // 👈 Dùng callback an toàn bất chấp thứ tự init
+            getPlayer: () => this.player,
+            getBlockHitbox: () => this.blockHitbox
         });
     }
 
