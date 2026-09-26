@@ -1,12 +1,12 @@
-class Checkpoint4MultitaskGame {
+class Checkpoint5InteractionGame {
     constructor() {
         try {
             this.initThree();
             this.initWorld();
-            this.initHotbarUI(); // BƯỚC 1: Hotbar đơn giản, rõ ràng, chắc chắn hiện
-            this.initControls(); // BƯỚC 2: Tách biệt hoàn toàn multitouch (Joystick, Look, Jump độc lập)
+            this.initHotbarUI();
+            this.initControls();
             this.animate();
-            console.log("🟢 Checkpoint 4 Multitask Fix đã khởi chạy thành công!");
+            console.log("🟢 Checkpoint 5 Block Interaction System đã khởi chạy thành công!");
         } catch (error) {
             this.showError(error);
         }
@@ -102,40 +102,45 @@ class Checkpoint4MultitaskGame {
     }
 
     initWorld() {
-        const materials = this.createBlockMaterials();
+        this.blockMaterials = this.createBlockMaterials();
 
         const groundGeo = new THREE.BoxGeometry(40, 1, 40);
-        this.ground = new THREE.Mesh(groundGeo, materials.grass);
+        this.ground = new THREE.Mesh(groundGeo, this.blockMaterials.grass);
         this.ground.position.set(0, -1, 0);
         this.scene.add(this.ground);
 
-        const blockTypes = ['grass', 'dirt', 'stone'];
-        const blockMats = [materials.grass, materials.dirt, materials.stone];
         this.worldBlocks = [];
+        this.blockMeshMap = new Map(); // Dùng để tra cứu nhanh mesh -> object block
+
+        const blockTypes = ['grass', 'dirt', 'stone'];
+        const blockMats = [this.blockMaterials.grass, this.blockMaterials.dirt, this.blockMaterials.stone];
 
         let idCounter = 1;
         for (let i = -3; i <= 3; i += 2) {
             const typeIndex = (Math.abs(i) % 3);
-            const blockGeo = new THREE.BoxGeometry(1, 1, 1);
-            const block = new THREE.Mesh(blockGeo, blockMats[typeIndex]);
-            
-            const posX = i;
-            const posY = 0.5;
-            const posZ = -5;
-
-            block.position.set(posX, posY, posZ);
-            this.scene.add(block);
-
-            this.worldBlocks.push({
-                id: idCounter++,
-                type: blockTypes[typeIndex],
-                position: { x: posX, y: posY, z: posZ },
-                mesh: block
-            });
+            this.spawnBlock(i, 0.5, -5, blockTypes[typeIndex], blockMats[typeIndex], idCounter++);
         }
     }
 
-    // --- BƯỚC 1: HOTBAR HIỂN THỊ RÕ RÀNG (CHẮC CHẮN THẤY) ---
+    spawnBlock(x, y, z, type, material, id) {
+        const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+        const blockMesh = new THREE.Mesh(blockGeo, material);
+        blockMesh.position.set(x, y, z);
+        this.scene.add(blockMesh);
+
+        const blockData = {
+            id: id || Date.now(),
+            type: type,
+            position: { x, y, z },
+            mesh: blockMesh
+        };
+
+        this.worldBlocks.push(blockData);
+        this.blockMeshMap.set(blockMesh.uuid, blockData);
+        return blockData;
+    }
+
+    // --- 1. HOTBAR UI & SELECTION ---
     initHotbarUI() {
         this.selectedBlockType = 'grass';
 
@@ -149,16 +154,18 @@ class Checkpoint4MultitaskGame {
         hotbarContainer.style.background = 'rgba(0, 0, 0, 0.7)';
         hotbarContainer.style.padding = '10px 15px';
         hotbarContainer.style.borderRadius = '12px';
-        hotbarContainer.style.zIndex = '9999'; // Đảm bảo nổi lên trên cùng, không bị che
+        hotbarContainer.style.zIndex = '9999';
         hotbarContainer.style.pointerEvents = 'auto';
 
-        hotbarContainer.addEventListener('pointerdown', (e) => e.stopPropagation());
-        hotbarContainer.addEventListener('pointermove', (e) => e.stopPropagation());
+        // Chặn hoàn toàn sự kiện lọt ra ngoài camera
+        ['pointerdown', 'pointermove', 'pointerup', 'click', 'touchstart', 'touchend'].forEach(eventType => {
+            hotbarContainer.addEventListener(eventType, (e) => e.stopPropagation());
+        });
 
         const items = [
-            { type: 'grass', label: 'GRASS' },
-            { type: 'dirt', label: 'DIRT' },
-            { type: 'stone', label: 'STONE' }
+            { type: 'grass', label: '🌱 GRASS' },
+            { type: 'dirt', label: '🟫 DIRT' },
+            { type: 'stone', label: '🪨 STONE' }
         ];
 
         this.hotbarSlots = [];
@@ -166,7 +173,7 @@ class Checkpoint4MultitaskGame {
         items.forEach((item, index) => {
             const slot = document.createElement('div');
             slot.innerText = item.label;
-            slot.style.width = '70px';
+            slot.style.width = '80px';
             slot.style.height = '45px';
             slot.style.background = index === 0 ? '#448822' : '#333333';
             slot.style.border = index === 0 ? '3px solid #ffff00' : '2px solid #ffffff';
@@ -174,13 +181,13 @@ class Checkpoint4MultitaskGame {
             slot.style.display = 'flex';
             slot.style.alignItems = 'center';
             slot.style.justifyContent = 'center';
-            slot.style.fontSize = '12px';
+            slot.style.fontSize = '11px';
             slot.style.color = '#ffffff';
             slot.style.fontWeight = 'bold';
             slot.style.cursor = 'pointer';
             slot.style.userSelect = 'none';
 
-            slot.addEventListener('click', (e) => {
+            slot.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 this.selectSlot(index, item.type);
             });
@@ -206,7 +213,84 @@ class Checkpoint4MultitaskGame {
         console.log(`🎒 Đã chọn block từ Hotbar: ${type}`);
     }
 
-    // --- BƯỚC 2: HỆ THỐNG CONTROLS & MULTITOUCH ĐỘC LẬP HOÀN TOÀN ---
+    // --- 2. RAYCAST BREAK & PLACE ---
+    breakBlock() {
+        const raycaster = new THREE.Raycaster();
+        const centerScreen = new THREE.Vector2(0, 0); // Tâm màn hình
+        raycaster.setFromCamera(centerScreen, this.camera);
+
+        const meshes = this.worldBlocks.map(b => b.mesh);
+        const intersects = raycaster.intersectObjects(meshes, false);
+
+        if (intersects.length > 0) {
+            const hitMesh = intersects[0].object;
+            const blockData = this.blockMeshMap.get(hitMesh.uuid);
+
+            if (blockData) {
+                // Xóa khỏi Scene
+                this.scene.remove(hitMesh);
+                hitMesh.geometry.dispose();
+                // Nếu material là mảng (grass), dispose từng material
+                if (Array.isArray(hitMesh.material)) {
+                    hitMesh.material.forEach(m => m.dispose());
+                } else {
+                    hitMesh.material.dispose();
+                }
+
+                // Xóa khỏi danh sách quản lý
+                this.blockMeshMap.delete(hitMesh.uuid);
+                this.worldBlocks = this.worldBlocks.filter(b => b.id !== blockData.id);
+
+                console.log(`⛏️ Đã đập block ID: ${blockData.id} tại vị trọng tâm!`);
+            }
+        } else {
+            console.log("⛏️ Không có block nào trong tầm ngắm để đập!");
+        }
+    }
+
+    placeBlock() {
+        const raycaster = new THREE.Raycaster();
+        const centerScreen = new THREE.Vector2(0, 0);
+        raycaster.setFromCamera(centerScreen, this.camera);
+
+        const meshes = this.worldBlocks.map(b => b.mesh);
+        const intersects = raycaster.intersectObjects(meshes, false);
+
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            // Tính toán vị trí block mới dựa vào mặt chạm (face normal)
+            const position = intersect.point.clone().add(intersect.face.normal.clone().multiplyScalar(0.5));
+            
+            // Làm tròn tọa độ về lưới ô vuông (grid 1x1)
+            const posX = Math.round(position.x);
+            const posY = Math.round(position.y);
+            const posZ = Math.round(position.z);
+
+            // Kiểm tra xem vị trí đó đã có block nào chưa
+            const existing = this.worldBlocks.some(b => 
+                Math.abs(b.position.x - posX) < 0.1 &&
+                Math.abs(b.position.y - posY) < 0.1 &&
+                Math.abs(b.position.z - posZ) < 0.1
+            );
+
+            if (existing) {
+                console.log("⚠️ Vị trí này đã có block, không thể đặt đè!");
+                return;
+            }
+
+            // Lấy material tương ứng với block đang chọn ở Hotbar
+            let mat = this.blockMaterials.grass;
+            if (this.selectedBlockType === 'dirt') mat = this.blockMaterials.dirt;
+            if (this.selectedBlockType === 'stone') mat = this.blockMaterials.stone;
+
+            this.spawnBlock(posX, posY, posZ, this.selectedBlockType, mat);
+            console.log(`🧱 Đã đặt block ${this.selectedBlockType} tại (${posX}, ${posY}, ${posZ})`);
+        } else {
+            console.log("🧱 Quá xa hoặc không nhắm vào block nào để đặt!");
+        }
+    }
+
+    // --- 3. CONTROLS & MULTITOUCH ĐỘC LẬP ---
     initControls() {
         this.player = {
             position: this.camera.position,
@@ -235,17 +319,21 @@ class Checkpoint4MultitaskGame {
         const btnBox = document.createElement('div');
         btnBox.style.position = 'absolute';
         btnBox.style.right = '20px';
-        btnBox.style.bottom = '80px'; // Nâng lên để không chạm hotbar
+        btnBox.style.bottom = '80px';
         btnBox.style.display = 'grid';
         btnBox.style.gridTemplateColumns = 'repeat(2, 60px)';
         btnBox.style.gap = '8px';
         btnBox.style.pointerEvents = 'auto';
 
+        ['pointerdown', 'pointermove', 'pointerup', 'click'].forEach(eventType => {
+            btnBox.addEventListener(eventType, (e) => e.stopPropagation());
+        });
+
         const actions = [
             { text: 'ĐỔI', cb: () => {} },
             { text: 'NHẢY', cb: () => this.jump() },
-            { text: 'ĐẶT', cb: () => { console.log(`🧱 Đặt block: ${this.selectedBlockType}`); } },
-            { text: 'ĐẬP', cb: () => { console.log("⛏️ Đập block"); } }
+            { text: 'ĐẶT', cb: () => this.placeBlock() },
+            { text: 'ĐẬP', cb: () => this.breakBlock() }
         ];
 
         actions.forEach(item => {
@@ -259,15 +347,17 @@ class Checkpoint4MultitaskGame {
             b.style.border = '2px solid #fff';
             b.style.fontWeight = 'bold';
             b.style.pointerEvents = 'auto';
+
             b.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
                 item.cb();
             });
+
             btnBox.appendChild(b);
         });
         ui.appendChild(btnBox);
 
-        // --- JOYSTICK TRÁI (ĐỘC LẬP TỪNG POINTER ID) ---
+        // --- JOYSTICK TRÁI ---
         const outerSize = 120;
         const innerSize = 50;
 
@@ -312,23 +402,20 @@ class Checkpoint4MultitaskGame {
             }
         });
 
-        // --- XOAY CAMERA ĐỘC LẬP (HỖ TRỢ MULTITOUCH ĐỒNG THỜI VỚI JOYSTICK) ---
-        let activeLookPointers = new Map(); // Hỗ trợ nhiều ngón tay xoay độc lập nếu cần
+        // --- XOAY CAMERA ĐỘC LẬP MULTITOUCH ---
+        let activeLookPointers = new Map();
 
         window.addEventListener('pointerdown', (e) => {
-            // Bỏ qua nếu chạm vào vùng Joystick hoặc vùng nút bấm phải hoặc Hotbar
             if (e.clientX < 180 && e.clientY > window.innerHeight - 220) return;
             if (e.clientX > window.innerWidth - 160 && e.clientY > window.innerHeight - 220) return;
             if (e.clientY > window.innerHeight - 70) return;
 
-            // Nếu ngón này không trùng với Joystick pointer đang giữ
             if (e.pointerId !== joyPointerId) {
                 activeLookPointers.set(e.pointerId, { lastX: e.clientX, lastY: e.clientY });
             }
         });
 
         window.addEventListener('pointermove', (e) => {
-            // Xử lý di chuyển joystick
             if (joyActive && e.pointerId === joyPointerId) {
                 const dx = e.clientX - center.x;
                 const dy = e.clientY - center.y;
@@ -343,7 +430,6 @@ class Checkpoint4MultitaskGame {
                 this.moveVector.set(mx / maxDist, my / maxDist);
             }
 
-            // Xử lý xoay camera cho từng ngón tay độc lập trong map
             if (activeLookPointers.has(e.pointerId)) {
                 const pData = activeLookPointers.get(e.pointerId);
                 const deltaX = e.clientX - pData.lastX;
@@ -399,16 +485,16 @@ class Checkpoint4MultitaskGame {
         const phi = THREE.MathUtils.degToRad(90 - this.lat);
         const theta = THREE.MathUtils.degToRad(this.lon);
 
-        const forwardDir = new THREE.Vector3(
+        this.forwardDir = new THREE.Vector3(
             Math.sin(phi) * Math.sin(theta),
             0,
             Math.sin(phi) * Math.cos(theta)
         ).normalize();
 
-        const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x);
+        const sideDir = new THREE.Vector3(-this.forwardDir.z, 0, this.forwardDir.x);
 
         if (this.moveVector.lengthSq() > 0) {
-            this.player.position.addScaledVector(forwardDir, -this.moveVector.y * this.player.speed);
+            this.player.position.addScaledVector(this.forwardDir, -this.moveVector.y * this.player.speed);
             this.player.position.addScaledVector(sideDir, this.moveVector.x * this.player.speed);
         }
 
@@ -435,6 +521,6 @@ class Checkpoint4MultitaskGame {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    new Checkpoint4MultitaskGame();
+    new Checkpoint5InteractionGame();
 });
             
