@@ -13,7 +13,7 @@ export function createBlockInteraction({ camera, scene, world, raycaster, hud })
         }
     };
 
-    // Hàm đập block (Break Block)
+    // Hàm đập block (Break Block) - Ấn 1 lần là đập và phát sự kiện sinh item
     function breakBlock() {
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
         const intersects = raycaster.intersectObjects(scene.children, true);
@@ -36,7 +36,7 @@ export function createBlockInteraction({ camera, scene, world, raycaster, hud })
                 const y = Math.floor(position.y);
                 const z = Math.floor(position.z);
 
-                // Lấy thông tin block trước khi xóa để biết loại block (WOOD, LEAVES, v.v.)
+                // Lấy thông tin block trước khi xóa để biết loại block
                 const targetType = world.get ? world.get(x, y, z) : null;
 
                 // Thực hiện xóa block trong world
@@ -45,13 +45,13 @@ export function createBlockInteraction({ camera, scene, world, raycaster, hud })
                 if (success) {
                     console.log(`⛏️ Đã đập block tại (${x}, ${y}, ${z})`);
                     // Phát sự kiện block bị đập để module itemDrop nhận và sinh vật phẩm
-                    EventBus.emit('block:broken', { x, y, z, type: targetType });
+                    EventBus.emit('block:broken', { x, y, z, type: targetType ? targetType.type : selectedBlockType });
                 }
             }
         }
     }
 
-    // Hàm đặt block (Place Block)
+    // Hàm đặt block (Place Block) - Ấn 1 lần là đặt ngay 1 block chuẩn xác
     function placeBlock() {
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
         const intersects = raycaster.intersectObjects(scene.children, true);
@@ -67,7 +67,7 @@ export function createBlockInteraction({ camera, scene, world, raycaster, hud })
                 normal.transformDirection(hit.object.matrixWorld);
                 normal.round();
 
-                // Tính tọa độ block mới cần đặt (cộng dồn theo hướng pháp tuyến mặt đối diện)
+                // Tính tọa độ block mới cần đặt
                 const position = hit.point.clone().add(normal.clone().multiplyScalar(0.5));
                 const x = Math.floor(position.x);
                 const y = Math.floor(position.y);
