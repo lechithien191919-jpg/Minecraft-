@@ -1,7 +1,7 @@
+import * as THREE from 'three';
 import { EventBus } from './eventBus.js';
 import { BLOCK_TYPES } from './blocks.js';
 
-// 🟢 THÊM DÒNG NÀY ĐỂ BÁO RA CONSOLE RẰNG FILE ĐÃ ĐƯỢC LOAD
 console.log('🟢 itemDrop.js đã load thành công và sẵn sàng!');
 
 export function createItemDrop({ scene, world, inventory }) {
@@ -9,19 +9,16 @@ export function createItemDrop({ scene, world, inventory }) {
     const MAX_ITEMS = 30;
     const DESPAWN_MS = 90000;
     const PICKUP_RADIUS = 1.5;
-    const ITEM_SIZE = 0.3;
+    const ITEM_SIZE = 0.5; // Đổi từ 0.3 lên 0.5 theo Option A
 
     const sharedGeo = new THREE.BoxGeometry(ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
 
-    // Tái sử dụng Vector3 để tránh tạo mới mỗi frame
     const _itemPos = new THREE.Vector3();
     const _playerPos = new THREE.Vector3();
 
     function spawnItem(x, y, z, type) {
-        // Chỉ cho phép WOOD và LEAVES, chặn các loại khác
         if (type !== 'wood' && type !== 'leaves') return;
 
-        // Nếu vượt quá MAX_ITEMS, xóa item cũ nhất (FIFO)
         if (items.length >= MAX_ITEMS) {
             const oldest = items.shift();
             if (oldest && oldest.mesh) {
@@ -29,7 +26,6 @@ export function createItemDrop({ scene, world, inventory }) {
             }
         }
 
-        // Lấy material trực tiếp từ BLOCK_TYPES, KHÔNG clone, KHÔNG dispose
         const blockDef = BLOCK_TYPES[type];
         const material = blockDef ? blockDef.material : new THREE.MeshBasicMaterial({ color: 0x888888 });
 
@@ -63,10 +59,8 @@ export function createItemDrop({ scene, world, inventory }) {
         for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
 
-            // 1. Race guard bắt buộc
             if (item.pickedUp) continue;
 
-            // 2. Despawn TRƯỚC (check timer 90s)
             if (now - item.createdAt > DESPAWN_MS) {
                 item.pickedUp = true;
                 scene.remove(item.mesh);
@@ -74,7 +68,6 @@ export function createItemDrop({ scene, world, inventory }) {
                 continue;
             }
 
-            // 3. Rơi nhẹ (gravity 15.0, dừng ở y = -10)
             if (item.mesh.position.y > -10) {
                 item.velocity.y -= 15.0 * dt;
                 item.mesh.position.y += item.velocity.y * dt;
@@ -84,11 +77,9 @@ export function createItemDrop({ scene, world, inventory }) {
                 }
             }
 
-            // 4. Xoay liên tục
             item.mesh.rotation.y += dt * 1.5;
             item.mesh.rotation.x += dt * 1.0;
 
-            // 5. Pickup SAU (check khoảng cách player ≤ 1.5)
             if (playerPos) {
                 _itemPos.copy(item.mesh.position);
                 const distSq = _itemPos.distanceToSquared(_playerPos);
@@ -102,6 +93,11 @@ export function createItemDrop({ scene, world, inventory }) {
         }
     }
 
+    // Lắng nghe sự kiện block bị đập vỡ từ blockInteraction.js
+    EventBus.on('block:broken', (data) => {
+        spawnItem(data.x, data.y, data.z, data.type);
+    });
+
     return { 
         spawnItem, 
         update, 
@@ -112,3 +108,4 @@ export function createItemDrop({ scene, world, inventory }) {
         } 
     };
 }
+
