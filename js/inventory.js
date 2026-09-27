@@ -1,41 +1,103 @@
-import { Inventory } from './js/inventory.js';
+import { EventBus } from './eventBus.js';
 
-const inv = new Inventory();
+export class Inventory {
+    constructor() {
+        this.items = new Map();
+    }
 
-// 1. addItem('wood', 1) → count = 1
-inv.addItem('wood', 1);
-console.log("Test 1 (1):", inv.getCount('wood') === 1); // true
+    addItem(type, amount = 1) {
+        if (!type || amount <= 0) return;
+        const current = this.items.get(type) || 0;
+        const newCount = current + amount;
+        this.items.set(type, newCount);
+        EventBus.emit('inventory:changed', { type, newCount });
+    }
 
-// 2. addItem('wood', 5) → count = 6
-inv.addItem('wood', 5);
-console.log("Test 2 (6):", inv.getCount('wood') === 6); // true
+    removeItem(type, amount = 1) {
+        if (!type || amount <= 0) return false;
+        const current = this.items.get(type) || 0;
+        if (current < amount) return false;
 
-// 3. removeItem('wood', 2) → count = 4
-inv.removeItem('wood', 2);
-console.log("Test 3 (4):", inv.getCount('wood') === 4); // true
+        const newCount = current - amount;
+        if (newCount <= 0) {
+            this.items.delete(type);
+        } else {
+            this.items.set(type, newCount);
+        }
 
-// 4. removeItem('wood', 999) → không được âm
-inv.removeItem('wood', 999);
-console.log("Test 4 (không âm):", inv.getCount('wood') === 4); // true (vẫn giữ nguyên 4 vì không đủ để trừ)
+        EventBus.emit('inventory:changed', { type, newCount: Math.max(0, newCount) });
+        return true;
+    }
 
-// 5. getCount('wood') trả đúng số lượng
-console.log("Test 5 (getCount):", inv.getCount('wood') === 4); // true
+    consume(type, amount = 1) {
+        if (!this.hasItem(type, amount)) {
+            return false;
+        }
+        return this.removeItem(type, amount);
+    }
 
-// 6. hasItem('wood', 1) phản ánh đúng trạng thái
-console.log("Test 6 (hasItem true):", inv.hasItem('wood', 1) === true); // true
-console.log("Test 7 (hasItem false):", inv.hasItem('wood', 10) === false); // true
+    getCount(type) {
+        return this.items.get(type) || 0;
+    }
 
-// 7. consume('wood', 1) khi count = 4 → true, count = 3
-console.log("Test 8 (consume true):", inv.consume('wood', 1) === true && inv.getCount('wood') === 3); // true
+    hasItem(type, amount = 1) {
+        return this.getCount(type) >= amount;
+    }
 
-// 8. consume khi count = 0 → false, count vẫn = 0
-inv.setCount('wood', 0);
-console.log("Test 9 (consume false khi = 0):", inv.consume('wood', 1) === false && inv.getCount('wood') === 0); // true
+    setCount(type, count) {
+        if (!type) return;
+        const newCount = Math.max(0, count);
+        if (newCount === 0) {
+            this.items.delete(type);
+        } else {
+            this.items.set(type, newCount);
+        }
+        EventBus.emit('inventory:changed', { type, newCount });
+    }
 
-// 9. addItem('wood', 1) 100 lần → count = 100, không crash
-for(let i=0; i<100; i++) inv.addItem('wood', 1);
-console.log("Test 10 (100 lần lặp):", inv.getCount('wood') === 100); // true
+    getSnapshot() {
+        return new Map(this.items);
+    }
+}
 
-// 10. setCount('wood', -5) → count = 0
-inv.setCount('wood', -5);
-console.log("Test 11 (setCount chặn số âm):", inv.getCount('wood') === 0); // true
+// === TỰ ĐỘNG CHẠY KIỂM TRA 10 TEST CASE ĐỂ BÁO CÁO CONSOLE ===
+try {
+    const inv = new Inventory();
+    let passed = true;
+
+    inv.addItem('wood', 1);
+    if (inv.getCount('wood') !== 1) passed = false;
+
+    inv.addItem('wood', 5);
+    if (inv.getCount('wood') !== 6) passed = false;
+
+    inv.removeItem('wood', 2);
+    if (inv.getCount('wood') !== 4) passed = false;
+
+    inv.removeItem('wood', 999);
+    if (inv.getCount('wood') !== 4) passed = false;
+
+    if (inv.getCount('wood') !== 4) passed = false;
+    if (inv.hasItem('wood', 1) !== true) passed = false;
+    if (inv.hasItem('wood', 10) !== false) passed = false;
+
+    if (!inv.consume('wood', 1) || inv.getCount('wood') !== 3) passed = false;
+
+    inv.setCount('wood', 0);
+    if (inv.consume('wood', 1) !== false || inv.getCount('wood') !== 0) passed = false;
+
+    for(let i=0; i<100; i++) inv.addItem('wood', 1);
+    if (inv.getCount('wood') !== 100) passed = false;
+
+    inv.setCount('wood', -5);
+    if (inv.getCount('wood') !== 0) passed = false;
+
+    if (passed) {
+        console.log("🟢 Inventory Core: 10/10 Test Case PASS - HOẠT ĐỘNG HOÀN HẢO");
+    } else {
+        console.error("🔴 Inventory Core: KHÔNG HOẠT ĐỘNG ĐÚNG (Có test case thất bại)");
+    }
+} catch (e) {
+    console.error("🔴 Inventory Core: KHÔNG HOẠT ĐỘNG - Lỗi:", e);
+}
+
