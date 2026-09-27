@@ -1,3 +1,65 @@
+import { EventBus } from './eventBus.js';
+
+export function createInventory() {
+    const items = new Map();
+
+    return {
+        addItem(type, amount = 1) {
+            if (!type || amount <= 0) return;
+            const current = items.get(type) || 0;
+            const newCount = current + amount;
+            items.set(type, newCount);
+            EventBus.emit('inventory:changed', { type, newCount });
+        },
+
+        removeItem(type, amount = 1) {
+            if (!type || amount <= 0) return false;
+            const current = items.get(type) || 0;
+            if (current < amount) return false;
+
+            const newCount = current - amount;
+            if (newCount <= 0) {
+                items.delete(type);
+            } else {
+                items.set(type, newCount);
+            }
+
+            EventBus.emit('inventory:changed', { type, newCount: Math.max(0, newCount) });
+            return true;
+        },
+
+        consume(type, amount = 1) {
+            if (!this.hasItem(type, amount)) {
+                return false;
+            }
+            return this.removeItem(type, amount);
+        },
+
+        getCount(type) {
+            return items.get(type) || 0;
+        },
+
+        hasItem(type, amount = 1) {
+            return this.getCount(type) >= amount;
+        },
+
+        setCount(type, count) {
+            if (!type) return;
+            const newCount = Math.max(0, count);
+            if (newCount === 0) {
+                items.delete(type);
+            } else {
+                items.set(type, newCount);
+            }
+            EventBus.emit('inventory:changed', { type, newCount });
+        },
+
+        getSnapshot() {
+            return new Map(items);
+        }
+    };
+}
+
 // === TẠM THỜI — XÓA SAU KHI PASS CP0 ===
 console.log('✅ inventory.js loaded');
 
