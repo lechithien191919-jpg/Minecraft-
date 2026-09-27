@@ -1,3 +1,4 @@
+import { createInventory } from './inventory.js';
 import { createBlockInteraction } from './blockInteraction.js';
 import { createBlockHitbox } from './blockHitbox.js';
 import { BLOCK_TYPES, createBlockMaterials } from './blocks.js';
