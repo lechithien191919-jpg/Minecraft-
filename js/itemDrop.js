@@ -1,81 +1,113 @@
-// itemDrop.js
-export function createItemDrop(options) {
-    const scene = options.scene;
-    const world = options.world;
+import * as THREE from 'three';
+import { EventBus } from './eventBus.js';
+import { BLOCK_TYPES } from './blocks.js';
+
+export function createItemDrop({ scene, world, inventory }) {
     const items = [];
+    const MAX_ITEMS = 30;
+    const DESPAWN_MS = 90000;
+    const PICKUP_RADIUS = 1.5;
+    const ITEM_SIZE = 0.3;
 
-    function spawnItem(position, blockType) {
-        const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-        
-        let color = 0x8b5a2b; 
-        if (blockType === 3) color = 0x5c4033; // Gỗ
-        else if (blockType === 4) color = 0x2e8b57; // Lá
-        else if (blockType === 1) color = 0x559933; // Cỏ
-        else if (blockType === 2) color = 0x7f7f7f; // Đá
+    const sharedGeo = new THREE.BoxGeometry(ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
 
-        const material = new THREE.MeshStandardMaterial({ color: color });
-        const mesh = new THREE.Mesh(geometry, material);
+    // Tái sử dụng Vector3 để tránh tạo mới mỗi frame (bảo vệ GC)
+    const _itemPos = new THREE.Vector3();
+    const _playerPos = new THREE.Vector3();
 
-        mesh.position.set(
-            position.x + (Math.random() - 0.5) * 0.5,
-            position.y + 0.5,
-            position.z + (Math.random() - 0.5) * 0.5
-        );
+    function spawnItem(x, y, z, type) {
+        // Chỉ cho phép WOOD và LEAVES, chặn các loại khác
+        if (type !== 'wood' && type !== 'leaves') return;
 
+        // Nếu vượt quá MAX_ITEMS, xóa item cũ nhất (FIFO)
+        if (items.length >= MAX_ITEMS) {
+            const oldest = items.shift();
+            if (oldest && oldest.mesh) {
+                scene.remove(oldest.mesh);
+                // Không dispose geometry/material chung vì dùng shared
+            }
+        }
+
+        // Lấy material trực tiếp từ BLOCK_TYPES, KHÔNG clone, KHÔNG dispose
+        const blockDef = BLOCK_TYPES[type];
+        const material = blockDef ? blockDef.material : new THREE.MeshBasicMaterial({ color: 0x888888 });
+
+        const mesh = new THREE.Mesh(sharedGeo, material);
+        mesh.position.set(x, y, z);
         scene.add(mesh);
 
-        items.push({
-            mesh: mesh,
-            type: blockType,
+        const itemData = {
+            mesh,
+            type,
+            createdAt: performance.now(),
+            pickedUp: false,
             velocity: new THREE.Vector3(
-                (Math.random() - 0.5) * 3,
-                4 + Math.random() * 2,
-                (Math.random() - 0.5) * 3
-            ),
-            age: 0,
-            maxAge: 90
-        });
+                (Math.random() - 0.5) * 2,
+                5.0, // lực tung nhẹ lên trên khi rơi ra
+                (Math.random() - 0.5) * 2
+            )
+        };
+
+        items.push(itemData);
+
+        console.log(`[CP1 SPAWN] type=${type} | pos=(${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}) | total=${items.length}`);
     }
 
-    function update(dt, playerPosition) {
+    function update(dt, playerPos) {
+        const now = performance.now();
+        if (playerPos) {
+            _playerPos.set(playerPos.x, playerPos.y, playerPos.z);
+        }
+
         for (let i = items.length - 1; i >= 0; i--) {
             const item = items[i];
-            item.age += dt;
 
-            if (item.age > item.maxAge || items.length > 30) {
+            // 1. Race guard bắt buộc
+            if (item.pickedUp) continue;
+
+            // 2. Despawn TRƯỚC (check timer 90s)
+            if (now - item.createdAt > DESPAWN_MS) {
+                item.pickedUp = true;
                 scene.remove(item.mesh);
-                item.mesh.geometry.dispose();
-                item.mesh.material.dispose();
                 items.splice(i, 1);
                 continue;
             }
 
-            item.velocity.y -= 15 * dt;
-            item.mesh.position.addScaledVector(item.velocity, dt);
-
-            if (item.mesh.position.y < -0.5) {
-                item.mesh.position.y = -0.5;
-                item.velocity.y = -item.velocity.y * 0.3;
-                item.velocity.x *= 0.8;
-                item.velocity.z *= 0.8;
+            // 3. Rơi nhẹ (gravity 15.0, dừng ở y = -10)
+            if (item.mesh.position.y > -10) {
+                item.velocity.y -= 15.0 * dt;
+                item.mesh.position.y += item.velocity.y * dt;
+                if (item.mesh.position.y <= -10) {
+                    item.mesh.position.y = -10;
+                    item.velocity.set(0, 0, 0);
+                }
             }
 
-            item.mesh.rotation.x += 1.5 * dt;
-            item.mesh.rotation.y += 2.0 * dt;
+            // 4. Xoay liên tục
+            item.mesh.rotation.y += dt * 1.5;
+            item.mesh.rotation.x += dt * 1.0;
 
-            const distance = item.mesh.position.distanceTo(playerPosition);
-            if (distance < 1.5) {
-                console.log(`[ITEM DROP] Đã nhặt item loại: ${item.type}`);
-                scene.remove(item.mesh);
-                item.mesh.geometry.dispose();
-                item.mesh.material.dispose();
-                items.splice(i, 1);
+            // 5. Pickup SAU (check khoảng cách player ≤ 1.5)
+            if (playerPos) {
+                _itemPos.copy(item.mesh.position);
+                const distSq = _itemPos.distanceToSquared(_playerPos);
+                if (distSq <= PICKUP_RADIUS * PICKUP_RADIUS) {
+                    item.pickedUp = true; // Bật race guard
+                    inventory.addItem(item.type, 1); // Cộng trực tiếp vào inventory
+                    scene.remove(item.mesh);
+                    items.splice(i, 1);
+                }
             }
         }
     }
 
-    return {
-        spawnItem,
-        update
+    return { 
+        spawnItem, 
+        update, 
+        getItems: () => [...items], 
+        clear: () => {
+            items.forEach(item => scene.remove(item.mesh));
+            items.length = 0;
+        } 
     };
 }
