@@ -1,6 +1,9 @@
 import { EventBus } from './eventBus.js';
 import { BLOCK_TYPES } from './blocks.js';
 
+// 🟢 THÊM DÒNG NÀY ĐỂ BÁO RA CONSOLE RẰNG FILE ĐÃ ĐƯỢC LOAD
+console.log('🟢 itemDrop.js đã load thành công và sẵn sàng!');
+
 export function createItemDrop({ scene, world, inventory }) {
     const items = [];
     const MAX_ITEMS = 30;
@@ -10,7 +13,7 @@ export function createItemDrop({ scene, world, inventory }) {
 
     const sharedGeo = new THREE.BoxGeometry(ITEM_SIZE, ITEM_SIZE, ITEM_SIZE);
 
-    // Tái sử dụng Vector3 để tránh tạo mới mỗi frame (bảo vệ GC)
+    // Tái sử dụng Vector3 để tránh tạo mới mỗi frame
     const _itemPos = new THREE.Vector3();
     const _playerPos = new THREE.Vector3();
 
@@ -23,7 +26,6 @@ export function createItemDrop({ scene, world, inventory }) {
             const oldest = items.shift();
             if (oldest && oldest.mesh) {
                 scene.remove(oldest.mesh);
-                // Không dispose geometry/material chung vì dùng shared
             }
         }
 
@@ -42,7 +44,7 @@ export function createItemDrop({ scene, world, inventory }) {
             pickedUp: false,
             velocity: new THREE.Vector3(
                 (Math.random() - 0.5) * 2,
-                5.0, // lực tung nhẹ lên trên khi rơi ra
+                5.0,
                 (Math.random() - 0.5) * 2
             )
         };
@@ -91,8 +93,8 @@ export function createItemDrop({ scene, world, inventory }) {
                 _itemPos.copy(item.mesh.position);
                 const distSq = _itemPos.distanceToSquared(_playerPos);
                 if (distSq <= PICKUP_RADIUS * PICKUP_RADIUS) {
-                    item.pickedUp = true; // Bật race guard
-                    inventory.addItem(item.type, 1); // Cộng trực tiếp vào inventory
+                    item.pickedUp = true;
+                    inventory.addItem(item.type, 1);
                     scene.remove(item.mesh);
                     items.splice(i, 1);
                 }
