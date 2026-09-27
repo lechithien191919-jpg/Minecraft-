@@ -88,4 +88,3 @@ export function createBlockInteraction({ camera, scene, world, raycaster, hud })
         placeBlock
     };
 }
-
