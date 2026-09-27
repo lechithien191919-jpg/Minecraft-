@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { EventBus } from './eventBus.js';
 import { BLOCK_TYPES } from './blocks.js';
 
