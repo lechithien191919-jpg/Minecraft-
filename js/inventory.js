@@ -1,70 +1,41 @@
-import { EventBus } from './eventBus.js';
+import { Inventory } from './js/inventory.js';
 
-export class Inventory {
-    constructor() {
-        this.items = new Map();
-    }
+const inv = new Inventory();
 
-    // 1. Tăng số lượng item
-    addItem(type, amount = 1) {
-        if (!type || amount <= 0) return;
-        const current = this.items.get(type) || 0;
-        const newCount = current + amount;
-        this.items.set(type, newCount);
-        
-        EventBus.emit('inventory:changed', { type, newCount });
-    }
+// 1. addItem('wood', 1) → count = 1
+inv.addItem('wood', 1);
+console.log("Test 1 (1):", inv.getCount('wood') === 1); // true
 
-    // 2. Trừ item (không cho âm)
-    removeItem(type, amount = 1) {
-        if (!type || amount <= 0) return false;
-        const current = this.items.get(type) || 0;
-        if (current < amount) return false;
+// 2. addItem('wood', 5) → count = 6
+inv.addItem('wood', 5);
+console.log("Test 2 (6):", inv.getCount('wood') === 6); // true
 
-        const newCount = current - amount;
-        if (newCount <= 0) {
-            this.items.delete(type);
-        } else {
-            this.items.set(type, newCount);
-        }
+// 3. removeItem('wood', 2) → count = 4
+inv.removeItem('wood', 2);
+console.log("Test 3 (4):", inv.getCount('wood') === 4); // true
 
-        EventBus.emit('inventory:changed', { type, newCount: Math.max(0, newCount) });
-        return true;
-    }
+// 4. removeItem('wood', 999) → không được âm
+inv.removeItem('wood', 999);
+console.log("Test 4 (không âm):", inv.getCount('wood') === 4); // true (vẫn giữ nguyên 4 vì không đủ để trừ)
 
-    // 3. Tiêu thụ item (API quan trọng cho việc đặt block)
-    consume(type, amount = 1) {
-        if (!this.hasItem(type, amount)) {
-            return false;
-        }
-        return this.removeItem(type, amount);
-    }
+// 5. getCount('wood') trả đúng số lượng
+console.log("Test 5 (getCount):", inv.getCount('wood') === 4); // true
 
-    // 4. Lấy số lượng hiện tại
-    getCount(type) {
-        return this.items.get(type) || 0;
-    }
+// 6. hasItem('wood', 1) phản ánh đúng trạng thái
+console.log("Test 6 (hasItem true):", inv.hasItem('wood', 1) === true); // true
+console.log("Test 7 (hasItem false):", inv.hasItem('wood', 10) === false); // true
 
-    // 5. Kiểm tra có đủ item không
-    hasItem(type, amount = 1) {
-        return this.getCount(type) >= amount;
-    }
+// 7. consume('wood', 1) khi count = 4 → true, count = 3
+console.log("Test 8 (consume true):", inv.consume('wood', 1) === true && inv.getCount('wood') === 3); // true
 
-    // 6. Set trực tiếp số lượng (cho Save/Load)
-    setCount(type, count) {
-        if (!type) return;
-        const newCount = Math.max(0, count);
-        if (newCount === 0) {
-            this.items.delete(type);
-        } else {
-            this.items.set(type, newCount);
-        }
+// 8. consume khi count = 0 → false, count vẫn = 0
+inv.setCount('wood', 0);
+console.log("Test 9 (consume false khi = 0):", inv.consume('wood', 1) === false && inv.getCount('wood') === 0); // true
 
-        EventBus.emit('inventory:changed', { type, newCount });
-    }
+// 9. addItem('wood', 1) 100 lần → count = 100, không crash
+for(let i=0; i<100; i++) inv.addItem('wood', 1);
+console.log("Test 10 (100 lần lặp):", inv.getCount('wood') === 100); // true
 
-    // 7. Trả về bản copy (tránh lộ Map gốc)
-    getSnapshot() {
-        return new Map(this.items);
-    }
-}
+// 10. setCount('wood', -5) → count = 0
+inv.setCount('wood', -5);
+console.log("Test 11 (setCount chặn số âm):", inv.getCount('wood') === 0); // true
