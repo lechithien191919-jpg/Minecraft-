@@ -502,4 +502,14 @@ class Checkpoint5FinalGame {
 
     animate() {
         requestAnimationFrame(() => this.animate());
-        
+        this.update();
+
+if (this.renderer && this.scene && this.camera) {
+    this.renderer.render(this.scene, this.camera);
+}
+}
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    new Checkpoint5FinalGame();
+});
